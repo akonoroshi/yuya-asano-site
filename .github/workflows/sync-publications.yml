@@ -1,0 +1,32 @@
+# Weekly: checks Google Scholar (via SerpApi) for new papers. If any are found, it commits the
+# updated src/data/publications.json, and Cloudflare redeploys the site from that commit.
+# Setup: add a repository secret named SERPAPI_KEY (Settings > Secrets and variables > Actions).
+name: Sync publications
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Mondays, 13:00 UTC
+  workflow_dispatch: # also lets you run it from the Actions tab
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/sync-publications.mjs
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+      - name: Commit new papers
+        run: |
+          if git diff --quiet -- src/data/publications.json; then
+            echo "No changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/publications.json
+          git commit -m "Add new papers from Google Scholar"
+          git push

@@ -1,0 +1,115 @@
+---
+// The main page, shared by / (English) and /ja/ (Japanese).
+import { Image } from "astro:assets";
+import type { ImageMetadata } from "astro";
+import Base from "../layouts/Base.astro";
+import CopyEmail from "../components/CopyEmail.astro";
+import Footer from "../components/Footer.astro";
+import LangSwitch from "../components/LangSwitch.astro";
+import PubList from "../components/PubList.astro";
+import { profile, text } from "../data/site";
+import { selectedPublications, allPublications, firstAuthorCount } from "../data/publications";
+import { getProjects } from "../lib/projects";
+import type { Lang } from "../i18n/ui";
+import { localePath, otherLang, useTranslations } from "../i18n/utils";
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const s = text[lang];
+
+// Your photo: put a square-ish image at src/assets/photo.jpg (or .png / .webp).
+// Astro resizes and compresses it at build time. Until then, initials are shown.
+const photos = import.meta.glob<{ default: ImageMetadata }>("../assets/photo.{jpg,jpeg,png,webp,avif}", { eager: true });
+const photo = Object.values(photos)[0]?.default;
+
+const projects = await getProjects(lang);
+const [primary, ...otherLinks] = profile.links;
+const scholar = profile.links.find((l) => l.key === "scholar")!;
+---
+
+<Base title={s.displayName} description={`${s.displayName}: ${s.statement}`} lang={lang} alternates={{ en: "/", ja: "/ja/" }}>
+  <main class="wrap">
+    <div class="topbar"><span></span><LangSwitch lang={lang} href={localePath(otherLang(lang), "/")} /></div>
+    <header>
+      <div class="id" data-enter style="--i:0">
+        {photo ? (
+          <Image src={photo} alt={s.photoAlt} width={160} class="avatar" loading="eager" />
+        ) : (
+          <span class="avatar" aria-hidden="true">YA</span>
+        )}
+        <span class="id-text">
+          <span class="name">{s.displayName}</span>
+          <span class="role">{s.role}</span>
+        </span>
+      </div>
+      <h1 class="statement" data-enter style="--i:1">{s.statement}</h1>
+      {s.lede.map((p, i) => (
+        <p class="lede" data-enter style={`--i:${i + 2}`}>{p}</p>
+      ))}
+      <nav class="links" aria-label={t("contactNav")} data-enter style={`--i:${s.lede.length + 2}`}>
+        <a class="pill pill--primary" href={primary.href}>{s.linkLabels[primary.key]}</a>
+        <CopyEmail email={profile.email} label={t("copyEmail")} doneLabel={t("copied")} />
+        {otherLinks.map((l) => <a class="pill" href={l.href}>{s.linkLabels[l.key]}</a>)}
+      </nav>
+    </header>
+
+    <section class="section" aria-labelledby="work">
+      <h2 class="section-title" id="work">{t("selectedWork")}</h2>
+      <ul class="rows">
+        {projects.map((p) => (
+          <li>
+            <a class="row" href={localePath(lang, `/projects/${p.id}/`)}>
+              <span class="row-title">
+                {p.data.title}
+                {p.data.badge && <span class="tag tag--agent">{p.data.badge}</span>}
+              </span>
+              <span class="row-desc">{p.data.summary}</span>
+              <span class="row-meta">{p.data.period}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="xp">
+      <h2 class="section-title" id="xp">{t("experience")}</h2>
+      <ul class="xp">
+        {s.experience.map((x) => (
+          <li>
+            <span class="xp-org">{x.org} <span class="xp-role">{x.role}</span></span>
+            <span class="xp-desc">{x.desc}</span>
+            <span class="xp-date">{x.date}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="pubs">
+      <h2 class="section-title" id="pubs">{t("recentPapers")}</h2>
+      <PubList items={selectedPublications} lang={lang} />
+      <p class="pub-more muted">
+        <a class="inline" href={localePath(lang, "/publications/")}>{t("allPapers", { n: allPublications.length, f: firstAuthorCount })}</a>
+        &nbsp;&nbsp;
+        <a class="inline" href={scholar.href}>Google Scholar</a>
+      </p>
+    </section>
+
+    <section class="section" aria-labelledby="edu">
+      <h2 class="section-title" id="edu">{t("education")}</h2>
+      <ul class="xp">
+        {s.education.map((x) => (
+          <li>
+            <span class="xp-org">{x.org} <span class="xp-role">{x.role}</span></span>
+            <span class="xp-desc">{x.desc}</span>
+            <span class="xp-date">{x.date}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <Footer lang={lang} />
+  </main>
+</Base>

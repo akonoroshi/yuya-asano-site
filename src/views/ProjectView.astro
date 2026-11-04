@@ -1,0 +1,82 @@
+---
+// A project page, shared by /projects/<id>/ and /ja/projects/<id>/.
+import { render } from "astro:content";
+import Base from "../layouts/Base.astro";
+import Footer from "../components/Footer.astro";
+import LangSwitch from "../components/LangSwitch.astro";
+import Replay from "../components/Replay.astro";
+import AsrDemo from "../components/AsrDemo.astro";
+import { text } from "../data/site";
+import type { LocalizedProject } from "../lib/projects";
+import type { Lang } from "../i18n/ui";
+import { localePath, otherLang, useTranslations } from "../i18n/utils";
+
+interface Props {
+  lang: Lang;
+  project: LocalizedProject;
+  next: LocalizedProject;
+}
+const { lang, project, next } = Astro.props;
+const { data } = project;
+const t = useTranslations(lang);
+const { Content } = await render(project.entry);
+const path = `/projects/${project.id}/`;
+
+// Conversations placed inside the write-up: split the rendered Markdown at each
+// <div data-example="name"></div> marker and put the matching replay there.
+const SLOT = /<div data-example="([\w-]+)"\s*><\/div>/g;
+const html = project.entry.rendered?.html;
+const parts = data.replays && html ? html.split(SLOT) : null; // [html, name, html, name, ...]
+---
+
+<Base title={`${data.title} | ${text[lang].displayName}`} description={data.subtitle} lang={lang} alternates={{ en: path, ja: `/ja${path}` }}>
+  <main class="wrap wrap--project">
+    <div class="topbar">
+      <a class="back" href={localePath(lang, "/")}>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"></path></svg>
+        {text[lang].displayName}
+      </a>
+      <LangSwitch lang={lang} href={localePath(otherLang(lang), path)} />
+    </div>
+    <h1 class="p-title">{data.title}</h1>
+    <p class="p-sub">{data.subtitle}</p>
+    <dl class="facts">
+      {data.facts.map((f) => (
+        <div><dt>{f.label}</dt><dd>{f.value}</dd></div>
+      ))}
+    </dl>
+    {data.links.length > 0 && (
+      <div class="p-links">
+        {data.links.map((l, i) => (
+          <a class:list={["pill", { "pill--primary": i === 0 }]} href={l.href}>{l.label}</a>
+        ))}
+      </div>
+    )}
+
+    {project.isFallback && <p class="status">{t("fallbackNotice")}</p>}
+    {data.notice && <p class="status">{data.notice}</p>}
+    {data.replay && <Replay {...data.replay} />}
+    {data.demo === "asr-correction" && <AsrDemo />}
+    {data.heroMedia && <div class="media">{data.heroMedia}</div>}
+
+    <article class="prose" lang={project.isFallback ? "en" : lang}>
+      {parts ? (
+        parts.map((part, i) => {
+          if (i % 2 === 0) return <Fragment set:html={part} />;
+          const example = data.replays?.[part];
+          return example ? <Replay {...example} /> : null;
+        })
+      ) : (
+        <Content />
+      )}
+    </article>
+
+    {next.id !== project.id && (
+      <a class="next" href={localePath(lang, `/projects/${next.id}/`)}>
+        <small>{t("nextProject")}</small>
+        <span>{next.data.title}</span>
+      </a>
+    )}
+    <Footer lang={lang} />
+  </main>
+</Base>

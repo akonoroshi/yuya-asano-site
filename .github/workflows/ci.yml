@@ -1,0 +1,18 @@
+# Builds every push and pull request (including Dependabot PRs). Astro's build also validates
+# every project file against the content schema, so a broken update or a typo fails here, not in production.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build

@@ -1,0 +1,20 @@
+---
+import ProjectView from "../../views/ProjectView.astro";
+import { getProjects, type LocalizedProject } from "../../lib/projects";
+
+export async function getStaticPaths() {
+  const projects = await getProjects("en");
+  return projects.map((project, i) => ({
+    params: { id: project.id },
+    props: { project, next: projects[(i + 1) % projects.length] },
+  }));
+}
+
+interface Props {
+  project: LocalizedProject;
+  next: LocalizedProject;
+}
+const { project, next } = Astro.props;
+---
+
+<ProjectView lang="en" project={project} next={next} />

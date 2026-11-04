@@ -1,0 +1,17 @@
+# Opens weekly pull requests for dependency updates. Minor and patch bumps are grouped
+# into one PR; major versions arrive as separate PRs so you can read the upgrade guide first.
+# Also enable "Dependabot security updates" in GitHub repo settings for out-of-cycle security fixes.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

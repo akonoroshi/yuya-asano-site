@@ -1,0 +1,38 @@
+---
+import Base from "../layouts/Base.astro";
+import Footer from "../components/Footer.astro";
+import LangSwitch from "../components/LangSwitch.astro";
+import PubList from "../components/PubList.astro";
+import { text } from "../data/site";
+import { publicationsByYear, allPublications, firstAuthorCount } from "../data/publications";
+import type { Lang } from "../i18n/ui";
+import { localePath, otherLang, useTranslations } from "../i18n/utils";
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const name = text[lang].displayName;
+---
+
+<Base title={`${t("publications")} | ${name}`} description={t("pubsDescription", { name })} lang={lang} alternates={{ en: "/publications/", ja: "/ja/publications/" }}>
+  <main class="wrap">
+    <div class="topbar">
+      <a class="back" href={localePath(lang, "/")}>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"></path></svg>
+        {name}
+      </a>
+      <LangSwitch lang={lang} href={localePath(otherLang(lang), "/publications/")} />
+    </div>
+    <h1 class="p-title">{t("publications")}</h1>
+    <p class="p-sub">{t("pubsSummary", { n: allPublications.length, f: firstAuthorCount })}</p>
+    {[...publicationsByYear].map(([year, items]) => (
+      <section aria-label={String(year ?? t("undated"))}>
+        <h2 class="year">{year ?? t("undated")}</h2>
+        <PubList items={items} lang={lang} />
+      </section>
+    ))}
+    <Footer lang={lang} />
+  </main>
+</Base>

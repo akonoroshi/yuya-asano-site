@@ -1,0 +1,198 @@
+---
+// Step-through conversation player. The turns come from a project's frontmatter.
+interface Turn {
+  role: "learner" | "learner2" | "agent";
+  who: string;
+  text: string;
+  mood?: string;
+  note?: string;
+  to?: string;
+  highlight?: { text: string; kind: "initiated" | "reused" | "established" }[];
+}
+interface Props {
+  title: string;
+  foot: string;
+  turns: Turn[];
+}
+const { title, foot, turns } = Astro.props;
+---
+
+<section class="replay" lang="en" data-replay data-turns={JSON.stringify(turns)} aria-label={title}>
+  <div class="replay-bar">
+    <span class="replay-title">{title}</span>
+    <div class="replay-controls">
+      <button class="ctl ctl--play" data-act="play">
+        <svg class="i-play" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M3 1.8v8.4c0 .5.5.8.9.5l6.4-4.2a.6.6 0 0 0 0-1L3.9 1.3c-.4-.3-.9 0-.9.5Z"></path></svg>
+        <svg class="i-pause" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" style="display:none"><rect x="2.5" y="1.5" width="2.5" height="9" rx=".8"></rect><rect x="7" y="1.5" width="2.5" height="9" rx=".8"></rect></svg>
+        <span>Play</span>
+      </button>
+      <button class="ctl" data-act="all">Show all</button>
+      <button class="ctl" data-act="reset">Restart</button>
+    </div>
+  </div>
+  <ol class="turns" aria-live="polite"></ol>
+  <p class="replay-foot">{foot}</p>
+  <noscript>
+    <ol class="turns">
+      {turns.map((t) => (
+        <li class="turn" data-role={t.role}>
+          <div class="who">{t.who}</div>
+          <div class="said">{t.text}</div>
+          {t.note && <div class="note">{t.note}</div>}
+        </li>
+      ))}
+    </ol>
+  </noscript>
+</section>
+
+<script>
+  type Highlight = { text: string; kind: string };
+  type Turn = { role: string; who: string; text: string; mood?: string; note?: string; to?: string; highlight?: Highlight[] };
+
+  // Appends text, wrapping highlighted phrases in <mark>. Uses text nodes only (no HTML parsing).
+  const appendText = (el: HTMLElement, text: string, highlights: Highlight[] = []) => {
+    if (highlights.length === 0) {
+      el.append(text);
+      return;
+    }
+    const kinds = new Map(highlights.map((h) => [h.text.toLowerCase(), h.kind]));
+    const escaped = highlights.map((h) => h.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    for (const piece of text.split(new RegExp(`(${escaped.join("|")})`, "gi"))) {
+      if (!piece) continue;
+      const kind = kinds.get(piece.toLowerCase());
+      if (kind) {
+        const m = document.createElement("mark");
+        m.className = `hl hl--${kind}`;
+        m.textContent = piece;
+        el.append(m);
+      } else el.append(piece);
+    }
+  };
+
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, reduced ? 0 : ms));
+
+  document.querySelectorAll<HTMLElement>("[data-replay]").forEach((root) => {
+    const turns: Turn[] = JSON.parse(root.dataset.turns ?? "[]");
+    const list = root.querySelector<HTMLOListElement>(".turns")!;
+    const playBtn = root.querySelector<HTMLButtonElement>("[data-act='play']")!;
+    const allBtn = root.querySelector<HTMLButtonElement>("[data-act='all']")!;
+    const resetBtn = root.querySelector<HTMLButtonElement>("[data-act='reset']")!;
+    const playLabel = playBtn.querySelector("span")!;
+    const iPlay = playBtn.querySelector<SVGElement>(".i-play")!;
+    const iPause = playBtn.querySelector<SVGElement>(".i-pause")!;
+    let i = 0;
+    let playing = false;
+    let run = 0; // increments to cancel an in-flight playback loop
+
+    // Build with DOM APIs (textContent), so content is never parsed as HTML.
+    const build = (t: Turn, animate: boolean) => {
+      const li = document.createElement("li");
+      li.className = "turn";
+      li.dataset.role = t.role;
+      if (!animate) li.style.animation = "none";
+      const who = document.createElement("div");
+      who.className = "who";
+      who.textContent = t.who;
+      if (t.to) {
+        const to = document.createElement("span");
+        to.className = "to";
+        to.textContent = `to ${t.to}`;
+        who.appendChild(to);
+      }
+      const body = document.createElement("div");
+      li.append(who, body);
+      list.appendChild(li);
+      return { li, body };
+    };
+    const fill = (li: HTMLElement, body: HTMLElement, t: Turn, animate: boolean) => {
+      body.replaceChildren();
+      const said = document.createElement("div");
+      said.className = "said";
+      appendText(said, t.text, t.highlight);
+      if (t.mood) {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.textContent = t.mood;
+        said.appendChild(chip);
+      }
+      body.appendChild(said);
+      if (t.note) {
+        const note = document.createElement("div");
+        note.className = "note";
+        if (!animate) note.style.animation = "none";
+        note.textContent = t.note;
+        li.appendChild(note);
+      }
+    };
+    const show = async (idx: number, animate: boolean, token: number) => {
+      const t = turns[idx];
+      const { li, body } = build(t, animate);
+      if (animate && t.role === "agent" && !reduced) {
+        const typing = document.createElement("span");
+        typing.className = "typing";
+        typing.setAttribute("aria-label", "typing");
+        typing.innerHTML = "<i></i><i></i><i></i>";
+        body.appendChild(typing);
+        await wait(700);
+        if (token !== run) {
+          li.remove();
+          return false;
+        }
+      }
+      fill(li, body, t, animate);
+      return true;
+    };
+    const sync = () => {
+      const done = i >= turns.length;
+      playLabel.textContent = playing ? "Pause" : done ? "Replay" : i > 1 ? "Resume" : "Play";
+      iPlay.style.display = playing ? "none" : "";
+      iPause.style.display = playing ? "" : "none";
+      allBtn.disabled = done;
+    };
+    const reset = () => {
+      run++;
+      playing = false;
+      list.replaceChildren();
+      i = 0;
+      void show(i++, false, run);
+      sync();
+    };
+    const play = async () => {
+      if (i >= turns.length) reset();
+      playing = true;
+      const token = ++run;
+      sync();
+      while (playing && token === run && i < turns.length) {
+        if (!(await show(i, true, token))) return;
+        const t = turns[i++];
+        await wait(Math.min(3600, 1100 + t.text.length * 26 + (t.note ? 1200 : 0)));
+      }
+      if (token === run) {
+        playing = false;
+        sync();
+      }
+    };
+
+    playBtn.addEventListener("click", () => {
+      if (playing) {
+        playing = false;
+        run++;
+        sync();
+      } else void play();
+    });
+    allBtn.addEventListener("click", () => {
+      run++;
+      playing = false;
+      list.querySelectorAll(".typing").forEach((n) => n.closest(".turn")?.remove());
+      while (i < turns.length) {
+        const { li, body } = build(turns[i], false);
+        fill(li, body, turns[i], false);
+        i++;
+      }
+      sync();
+    });
+    resetBtn.addEventListener("click", reset);
+    reset();
+  });
+</script>

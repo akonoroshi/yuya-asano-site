@@ -1,0 +1,130 @@
+---
+// Interactive explainer of the two correction strategies, using the worked examples
+// from the paper (Asano et al., COLING 2025, Sections 3.2 and 3.3).
+---
+
+<section class="replay asr" lang="en" data-asr-demo aria-label="How the correction works">
+  <div class="replay-bar">
+    <div class="tabs" role="tablist" aria-label="Correction strategy">
+      <button class="tab" role="tab" id="tab-rerank" aria-controls="panel-rerank" aria-selected="true" data-tab="rerank">Re-rank the guesses</button>
+      <button class="tab" role="tab" id="tab-sound" aria-controls="panel-sound" aria-selected="false" tabindex="-1" data-tab="sound">Match by sound</button>
+    </div>
+  </div>
+
+  <div class="rr" role="tabpanel" id="panel-rerank" aria-labelledby="tab-rerank" data-panel="rerank">
+    <p class="rr-context">The user says: <b>how to care for outdoor plants</b></p>
+    <p class="rr-heard">The recognizer returns several guesses. Normally only the first one is used.</p>
+    <ol class="rr-list">
+      <li class="rr-item" data-before="0" data-after="1">
+        <span class="rr-text">how to <mark>camper</mark> for outdoor plants</span>
+        <span class="rr-rank">1st guess</span>
+        <span class="rr-check"><span>Task search finds nothing like this.</span></span>
+      </li>
+      <li class="rr-item" data-before="1" data-after="0">
+        <span class="rr-text">how to care for outdoor plants</span>
+        <span class="rr-rank">2nd guess</span>
+        <span class="rr-check"><span>Task search finds “take care plant,” above the similarity threshold.</span></span>
+      </li>
+    </ol>
+    <div class="rr-actions">
+      <button class="ctl ctl--play" data-act="rerank"><span>Re-rank with task context</span></button>
+      <span class="rr-explain" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <div class="rr" role="tabpanel" id="panel-sound" aria-labelledby="tab-sound" data-panel="sound" hidden>
+    <p class="rr-context">A task the assistant can do: <b>how to fix a bathroom faucet</b></p>
+    <p class="rr-heard">The user says “how can I fix a leaky bathroom faucet.” None of the guesses is right, so the method compares sounds instead.</p>
+    <p class="tokens" aria-label="What the recognizer heard">
+      <span class="tok">how</span> <span class="tok">can</span> <span class="tok">I</span>
+      <span class="tok" data-m>fix</span> <span class="tok" data-m>a</span>
+      <span class="tok" data-skip>leaky</span>
+      <span class="tok" data-m>bathroom</span>
+      <span class="tok tok--swap" data-m><span class="tok-old">for sit</span><span class="tok-new">faucet</span></span>
+    </p>
+    <div class="phon" aria-hidden="true">
+      <div><span class="phon-w">for sit</span><span>F</span><span>AO</span><span class="x">R</span><span>S</span><span class="x">IH</span><span>T</span></div>
+      <div><span class="phon-w">faucet</span><span>F</span><span>AO</span><span>S</span><span class="x">AH</span><span>T</span></div>
+    </div>
+    <div class="rr-actions">
+      <button class="ctl ctl--play" data-act="sound"><span>Match by sound</span></button>
+      <span class="rr-explain" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <p class="replay-foot">Examples from the paper. They resemble real user requests but are not taken from real conversations.</p>
+</section>
+
+<script>
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  document.querySelectorAll<HTMLElement>("[data-asr-demo]").forEach((root) => {
+    // ---- tabs (arrow keys move between them, per the ARIA tabs pattern)
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>("[role='tab']")];
+    const panels = [...root.querySelectorAll<HTMLElement>("[role='tabpanel']")];
+    const select = (tab: HTMLButtonElement) => {
+      tabs.forEach((t) => {
+        const on = t === tab;
+        t.setAttribute("aria-selected", String(on));
+        t.tabIndex = on ? 0 : -1;
+      });
+      panels.forEach((p) => (p.hidden = p.dataset.panel !== tab.dataset.tab));
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener("click", () => select(tab));
+      tab.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+        next.focus();
+        select(next);
+      });
+    });
+
+    // ---- strategy 1: re-rank n-best guesses (FLIP reorder)
+    const rr = root.querySelector<HTMLElement>("[data-panel='rerank']")!;
+    const list = rr.querySelector<HTMLOListElement>(".rr-list")!;
+    const items = [...list.querySelectorAll<HTMLLIElement>(".rr-item")];
+    const rrBtn = rr.querySelector<HTMLButtonElement>("[data-act='rerank']")!;
+    const rrExplain = rr.querySelector<HTMLElement>(".rr-explain")!;
+    let ranked = false;
+    const renderRank = (animate: boolean) => {
+      const key = ranked ? "after" : "before";
+      const first = new Map(items.map((el) => [el, el.getBoundingClientRect().top]));
+      [...items].sort((a, b) => Number(a.dataset[key]) - Number(b.dataset[key])).forEach((el) => list.appendChild(el));
+      items.forEach((el) => {
+        el.classList.toggle("is-top", ranked && el.dataset.after === "0");
+        el.classList.toggle("is-checked", ranked);
+        const dy = (first.get(el) ?? 0) - el.getBoundingClientRect().top;
+        if (animate && dy && !reduced) {
+          el.animate([{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }], {
+            duration: 520,
+            easing: "cubic-bezier(.23,1,.32,1)",
+          });
+        }
+      });
+      rrBtn.querySelector("span")!.textContent = ranked ? "Reset" : "Re-rank with task context";
+      rrExplain.textContent = ranked
+        ? "Only the 2nd guess matches a real task, so it becomes the correction."
+        : "";
+    };
+    rrBtn.addEventListener("click", () => {
+      ranked = !ranked;
+      renderRank(true);
+    });
+    renderRank(false);
+
+    // ---- strategy 2: phonetic match against the task (longest common subsequence of phonemes)
+    const snd = root.querySelector<HTMLElement>("[data-panel='sound']")!;
+    const sndBtn = snd.querySelector<HTMLButtonElement>("[data-act='sound']")!;
+    const sndExplain = snd.querySelector<HTMLElement>(".rr-explain")!;
+    let matched = false;
+    sndBtn.addEventListener("click", () => {
+      matched = !matched;
+      snd.classList.toggle("is-matched", matched);
+      sndBtn.querySelector("span")!.textContent = matched ? "Reset" : "Match by sound";
+      sndExplain.textContent = matched
+        ? "The matching sounds line up with the task, so “for sit” becomes “faucet.” The extra word “leaky” is skipped, not counted against the match."
+        : "";
+    });
+  });
+</script>

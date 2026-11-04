@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yuya-asano-site",
+  // Bump this date occasionally (e.g., when you upgrade wrangler) to opt into new runtime behavior.
+  "compatibility_date": "2026-11-03",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  }
+  // When you add the chat backend, add "main": "./worker/index.ts" and
+  // "run_worker_first": ["/api/*"] inside "assets", so static pages never hit the Worker quota.
+}

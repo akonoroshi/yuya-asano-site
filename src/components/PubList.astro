@@ -1,0 +1,35 @@
+---
+import type { Publication } from "../data/publications";
+import { isMe } from "../data/publications";
+import type { Lang } from "../i18n/ui";
+import { awardLabel, useTranslations } from "../i18n/utils";
+
+interface Props {
+  items: Publication[];
+  lang: Lang;
+}
+const { items, lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<ul class="pubs">
+  {items.map((p) => (
+    <li class="pub">
+      <div class="pub-title" lang="en">
+        {p.href ? <a href={p.href}>{p.title}</a> : p.title}
+        {p.award && <span class="tag tag--agent" lang={lang}>{awardLabel(lang, p.award)}</span>}
+        {p.preprint && <span class="tag tag--learner" lang={lang}>{t("preprint")}</span>}
+      </div>
+      <div class="pub-authors" lang="en">
+        {p.authors.map((a, i) => (
+          <>{i > 0 && ", "}{isMe(a) ? <b>{a}</b> : a}</>
+        ))}
+      </div>
+      <div class="pub-venue">
+        <span lang="en">{p.venue}</span>
+        {p.code && <>&nbsp;&nbsp;<a class="inline" href={p.code}>{t("code")}</a></>}
+        {p.arxiv && <>&nbsp;&nbsp;<a class="inline" href={p.arxiv}>arXiv</a></>}
+      </div>
+    </li>
+  ))}
+</ul>

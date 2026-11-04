@@ -1,0 +1,191 @@
+[
+  {
+    "title": "Can LLMs simulate the same correct solutions to free-response math problems as real students?",
+    "authors": [
+      "Y. Asano",
+      "D. Litman",
+      "E. Walker"
+    ],
+    "venue": "EMNLP 2025",
+    "year": 2025,
+    "href": "https://aclanthology.org/2025.emnlp-main.827/"
+  },
+  {
+    "title": "Exploring task formulation strategies to evaluate the coherence of classroom discussions with GPT-4o",
+    "authors": [
+      "Y. Asano",
+      "B. Beigman Klebanov",
+      "J. N. Mikeska"
+    ],
+    "venue": "BEA 2025",
+    "year": 2025,
+    "href": "https://aclanthology.org/2025.bea-1.52/"
+  },
+  {
+    "title": "Multi-party lexical alignment in collaborative learning with a teachable robot",
+    "authors": [
+      "Y. Asano",
+      "D. Litman",
+      "P. Sharma",
+      "D. Fritsch",
+      "Q. King-Shepard",
+      "T. Nokes-Malach",
+      "A. Kovashka",
+      "E. Walker"
+    ],
+    "venue": "AIED 2025",
+    "year": 2025,
+    "href": "https://doi.org/10.1007/978-3-031-98465-5_16",
+    "code": "https://github.com/akonoroshi/dialign_python"
+  },
+  {
+    "title": "Beyond static measures: Temporal analysis of lexical alignment in human-human learning with a teachable robot",
+    "authors": [
+      "P. Sharma",
+      "D. Fritsch",
+      "Y. Asano",
+      "Q. King-Shepard",
+      "T. Langley",
+      "T. Maidment",
+      "D. Litman",
+      "T. Nokes-Malach",
+      "A. Kovashka",
+      "N. Lobczowski",
+      "E. Walker"
+    ],
+    "venue": "AIED 2025",
+    "year": 2025,
+    "href": "https://doi.org/10.1007/978-3-031-98459-4_20"
+  },
+  {
+    "title": "Contextual ASR error handling with LLMs augmentation for goal-oriented conversational AI",
+    "authors": [
+      "Y. Asano",
+      "S. Hassan",
+      "P. Sharma",
+      "A. B. Sicilia",
+      "K. Atwell",
+      "D. Litman",
+      "M. Alikhani"
+    ],
+    "venue": "COLING 2025, Industry Track",
+    "year": 2025,
+    "href": "https://aclanthology.org/2025.coling-industry.32/"
+  },
+  {
+    "title": "What metrics of participation balance predict outcomes of collaborative learning with a robot?",
+    "authors": [
+      "Y. Asano",
+      "D. Litman",
+      "Q. King-Shepard",
+      "T. Maidment",
+      "T. Langley",
+      "T. Davison",
+      "T. Nokes-Malach",
+      "A. Kovashka",
+      "E. Walker"
+    ],
+    "venue": "EDM 2024",
+    "year": 2024,
+    "href": "https://doi.org/10.5281/zenodo.12729888",
+    "arxiv": "https://arxiv.org/abs/2405.11092"
+  },
+  {
+    "title": "Impact of experiencing misrecognition by teachable agents on learning and rapport",
+    "authors": [
+      "Y. Asano",
+      "D. Litman",
+      "M. Yu",
+      "N. Lobczowski",
+      "T. Nokes-Malach",
+      "A. Kovashka",
+      "E. Walker"
+    ],
+    "venue": "AIED 2023",
+    "year": 2023,
+    "href": "https://doi.org/10.1007/978-3-031-36336-8_94",
+    "arxiv": "https://arxiv.org/abs/2306.07302",
+    "award": "Best poster"
+  },
+  {
+    "title": "Comparison of lexical alignment with a teachable robot in human-robot and human-human-robot interactions",
+    "authors": [
+      "Y. Asano",
+      "D. Litman",
+      "M. Yu",
+      "N. Lobczowski",
+      "T. Nokes-Malach",
+      "A. Kovashka",
+      "E. Walker"
+    ],
+    "venue": "SIGDIAL 2022",
+    "year": 2022,
+    "href": "https://aclanthology.org/2022.sigdial-1.57/"
+  },
+  {
+    "title": "A thematic summarization dashboard for navigating student reflections at scale",
+    "authors": [
+      "Y. Asano",
+      "S. Sankaranarayanan",
+      "M. Sakr",
+      "C. Bogart"
+    ],
+    "venue": "ICCE 2021",
+    "year": 2021,
+    "href": "https://library.apsce.net/index.php/ICCE/article/view/4149"
+  },
+  {
+    "title": "Exploring additional personalized support while attempting exercise problems in online learning platforms",
+    "authors": [
+      "Y. Asano",
+      "M. Dutta",
+      "T. Thakur",
+      "J. Solyst",
+      "S. Cristea",
+      "H. Jovic",
+      "A. Petersen",
+      "J. J. Williams"
+    ],
+    "venue": "L@S 2021",
+    "year": 2021,
+    "href": "https://doi.org/10.1145/3430895.3460145"
+  },
+  {
+    "title": "Procrastination and gaming in an online homework system of an inverted CS1",
+    "authors": [
+      "J. Solyst",
+      "T. Thakur",
+      "M. Dutta",
+      "Y. Asano",
+      "A. Petersen",
+      "J. J. Williams"
+    ],
+    "venue": "SIGCSE 2021",
+    "year": 2021,
+    "href": "https://doi.org/10.1145/3408877.3432440"
+  },
+  {
+    "title": "Using information visualization to promote students’ reflection on “gaming the system” in online learning",
+    "authors": [
+      "M. Xia",
+      "Y. Asano",
+      "J. J. Williams",
+      "H. Qu",
+      "X. Ma"
+    ],
+    "venue": "L@S 2020",
+    "year": 2020,
+    "href": ""
+  },
+  {
+    "title": "Characterizing and influencing students’ tendency to write self-explanations in online homework",
+    "authors": [
+      "Y. Asano",
+      "J. Solyst",
+      "J. J. Williams"
+    ],
+    "venue": "LAK 2020",
+    "year": 2020,
+    "href": "https://doi.org/10.1145/3375462.3375511"
+  }
+]

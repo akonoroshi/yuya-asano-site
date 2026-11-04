@@ -1,0 +1,34 @@
+---
+interface Props {
+  email: string;
+  label: string;
+  doneLabel: string;
+}
+const { email, label, doneLabel } = Astro.props;
+---
+
+<button class="pill copy" data-copy={email}>
+  <span class="copy-label">{label}</span>
+  <span class="copy-done">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"></path></svg>
+    {doneLabel}
+  </span>
+</button>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((btn) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    btn.addEventListener("click", async () => {
+      const email = btn.dataset.copy ?? "";
+      try {
+        await navigator.clipboard.writeText(email);
+      } catch {
+        window.location.href = `mailto:${email}`;
+        return;
+      }
+      btn.classList.add("is-done");
+      clearTimeout(timer);
+      timer = setTimeout(() => btn.classList.remove("is-done"), 1600);
+    });
+  });
+</script>

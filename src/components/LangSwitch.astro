@@ -1,0 +1,14 @@
+---
+import { languages, type Lang } from "../i18n/ui";
+import { otherLang, useTranslations } from "../i18n/utils";
+
+interface Props {
+  lang: Lang; // language of the current page
+  href: string; // the same page in the other language
+}
+const { lang, href } = Astro.props;
+const other = otherLang(lang);
+const t = useTranslations(lang);
+---
+
+<a class="lang-switch" href={href} hreflang={other} lang={other} aria-label={t("switchLabel")}>{languages[other]}</a>

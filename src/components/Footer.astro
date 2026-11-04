@@ -1,0 +1,16 @@
+---
+import { profile, text } from "../data/site";
+import type { Lang } from "../i18n/ui";
+import { localePath, useTranslations } from "../i18n/utils";
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<footer class="footer">
+  <span>© {new Date().getFullYear()} {text[lang].displayName}</span>
+  <span><a href={localePath(lang, "/")}>{t("footerWork")}</a>&nbsp;&nbsp;&nbsp;<a href={`mailto:${profile.email}`}>{t("footerEmail")}</a></span>
+</footer>

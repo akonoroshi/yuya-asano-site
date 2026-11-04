@@ -1,0 +1,26 @@
+{
+  "name": "yuya-asano-site",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro build && wrangler dev",
+    "deploy": "astro build && wrangler deploy",
+    "upgrade:astro": "npx @astrojs/upgrade",
+    "upgrade:check": "npm outdated",
+    "sync:publications": "node scripts/sync-publications.mjs",
+    "clean": "rm -rf dist .astro node_modules/.vite",
+    "dev:fresh": "npm run clean && astro dev"
+  },
+  "dependencies": {
+    "@fontsource-variable/hanken-grotesk": "^5.0.0",
+    "astro": "^7.4.5"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

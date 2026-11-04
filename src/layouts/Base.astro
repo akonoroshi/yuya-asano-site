@@ -1,0 +1,59 @@
+---
+// Shared <head> and page shell. Fonts are self-hosted via Fontsource (no Google Fonts request).
+// Japanese text uses the visitor's system fonts (see :lang(ja) in global.css).
+import "@fontsource-variable/hanken-grotesk";
+import "../styles/global.css";
+import type { Lang } from "../i18n/ui";
+
+interface Props {
+  title: string;
+  description: string;
+  lang: Lang;
+  /** Paths of this page in each language, for hreflang tags. */
+  alternates?: Record<Lang, string>;
+}
+const { title, description, lang, alternates } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {alternates && (
+      <>
+        <link rel="alternate" hreflang="en" href={new URL(alternates.en, Astro.site)} />
+        <link rel="alternate" hreflang="ja" href={new URL(alternates.ja, Astro.site)} />
+        <link rel="alternate" hreflang="x-default" href={new URL(alternates.en, Astro.site)} />
+      </>
+    )}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={lang === "ja" ? "ja_JP" : "en_US"} />
+    <meta property="og:image" content={new URL("/og-image.png", Astro.site)} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Yuya Asano — Intelligent Systems, University of Pittsburgh" />
+  </head>
+  <body>
+    <slot />
+    <script>
+      // Open links to other sites (and PDFs) in a new tab. Runs once per page and covers
+      // every link, including ones written by hand in project Markdown files.
+      document.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((a) => {
+        const url = new URL(a.href, window.location.href);
+        if (!url.protocol.startsWith("http")) return; // leave mailto: and similar alone
+        if (url.origin !== window.location.origin || url.pathname.endsWith(".pdf")) {
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+        }
+      });
+    </script>
+  </body>
+</html>
