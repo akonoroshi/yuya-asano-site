@@ -6,7 +6,9 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page"
-  }
+  },
+  // Lets Cloudflare build preview URLs for pull requests and non-main branches.
+  "previews": {}
   // When you add the chat backend, add "main": "./worker/index.ts" and
   // "run_worker_first": ["/api/*"] inside "assets", so static pages never hit the Worker quota.
 }
