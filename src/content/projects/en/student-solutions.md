@@ -11,8 +11,9 @@ facts:
   - { label: "LLM data", value: "5,838 solutions, 4 models, 13 methods" }
 links:
   - { label: "Read the paper", href: "https://aclanthology.org/2025.emnlp-main.827/" }
-heroMedia: "Key figure goes here: distribution of solution strategies, students vs. LLMs (from the paper)."
 ---
+
+![Solution strategies used by students vs. LLMs](./images/solutions-figure.png)
 
 ## Why it matters
 

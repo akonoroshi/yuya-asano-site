@@ -10,8 +10,9 @@ facts:
   - { label: "LLMのデータ", value: "4モデル・13手法による5,838件の解答" }
 links:
   - { label: "論文を読む", href: "https://aclanthology.org/2025.emnlp-main.827/" }
-heroMedia: "ここに主要な図が入ります：生徒とLLMの解き方の分布（論文より）"
 ---
+
+![生徒とLLMの解き方の分布](./images/solutions-figure.png)
 
 ## なぜ重要か
 
