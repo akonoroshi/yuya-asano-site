@@ -1,0 +1,18 @@
+{
+  // Type-checks the Worker against the Workers runtime instead of the browser DOM.
+  // Generate the runtime types first: npx wrangler types  (writes ../worker-configuration.d.ts)
+  // Then: npx tsc -p worker
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2024"],
+    "types": [],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["./**/*.ts", "../worker-configuration.d.ts"]
+}

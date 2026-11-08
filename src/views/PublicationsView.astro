@@ -16,10 +16,10 @@ const t = useTranslations(lang);
 const name = text[lang].displayName;
 ---
 
-<Base title={`${t("publications")} | ${name}`} description={t("pubsDescription", { name })} lang={lang} alternates={{ en: "/publications/", ja: "/ja/publications/" }}>
+<Base title={`${t("publications")} | ${name}`} description={t("pubsDescription", { name })} lang={lang} alternates={{ en: "/publications/", ja: "/ja/publications/" }} chatPage="publications">
   <main class="wrap">
     <div class="topbar">
-      <a class="back" href={localePath(lang, "/")}>
+      <a class="back" href={localePath(lang, "/work/")}>
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"></path></svg>
         {name}
       </a>

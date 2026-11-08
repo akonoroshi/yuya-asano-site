@@ -3,12 +3,50 @@
   "name": "yuya-asano-site",
   // Bump this date occasionally (e.g., when you upgrade wrangler) to opt into new runtime behavior.
   "compatibility_date": "2026-11-03",
+  "main": "./worker/index.ts",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    // Only API calls run the Worker. Pages, the VRM model, and the chat dictionaries are
+    // served as static assets, which are free and never count toward the request quota.
+    "run_worker_first": ["/api/*"]
   },
   // Lets Cloudflare build preview URLs for pull requests and non-main branches.
-  "previews": {}
-  // When you add the chat backend, add "main": "./worker/index.ts" and
-  // "run_worker_first": ["/api/*"] inside "assets", so static pages never hit the Worker quota.
+  "previews": {},
+  "observability": { "enabled": true },
+
+  "ai": { "binding": "AI" },
+  // Create once: npx wrangler vectorize create site-chat --dimensions=1024 --metric=cosine
+  // then:        npx wrangler vectorize create-metadata-index site-chat --property-name=scope --type=string
+  "vectorize": [{ "binding": "VECTORIZE", "index_name": "site-chat" }],
+
+  // Per visitor (IP), per Cloudflare location. period must be 10 or 60 seconds.
+  "ratelimits": [
+    { "name": "CHAT_BURST", "namespace_id": "1001", "simple": { "limit": 3, "period": 10 } },
+    { "name": "CHAT_SUSTAINED", "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } },
+    { "name": "TELEMETRY_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } }
+  ],
+
+  // Global daily caps on LLM calls (see worker/budget.ts).
+  "durable_objects": { "bindings": [{ "name": "BUDGET", "class_name": "Budget" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Budget"] }],
+
+  "vars": {
+    "GEMINI_MODEL": "gemini-3.8-flash",
+    // Gemini 3.x thinking adds latency; "minimal" suits short grounded answers. "" = model default.
+    "GEMINI_THINKING_LEVEL": "minimal",
+    "FALLBACK_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    // Multilingual, so English and Japanese questions share one index. 1024 dimensions.
+    "EMBED_MODEL": "@cf/baai/bge-m3",
+    "DAILY_LLM_LIMIT": "300",
+    // Kept small: the fallback shares Workers AI's daily free neurons with the embeddings.
+    "DAILY_FALLBACK_LIMIT": "30",
+    // Below this similarity to everything on the site, the question gets a canned redirect.
+    // Tune it from the topScore values in the chat_llm / chat_offtopic logs.
+    "OFFTOPIC_THRESHOLD": "0.45",
+    // Optional: route LLM calls through Cloudflare AI Gateway (logs, dashboard rate limits).
+    "AI_GATEWAY_ID": "",
+    "CF_ACCOUNT_ID": "",
+    "ALLOWED_ORIGINS": ""
+  }
 }

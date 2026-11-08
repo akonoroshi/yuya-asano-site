@@ -1,5 +1,6 @@
 ---
-// The main page, shared by / (English) and /ja/ (Japanese).
+// The portfolio page, shared by /work/ (English) and /ja/work/ (Japanese).
+// The home page (/ and /ja/) is the chat; see ChatView.astro.
 import { Image } from "astro:assets";
 import type { ImageMetadata } from "astro";
 import Base from "../layouts/Base.astro";
@@ -28,11 +29,13 @@ const photo = Object.values(photos)[0]?.default;
 const projects = await getProjects(lang);
 const [primary, ...otherLinks] = profile.links;
 const scholar = profile.links.find((l) => l.key === "scholar")!;
+// The "chat" link opens the full-screen chat in place (data-chat-open, see ChatLauncher.astro).
+// Without JavaScript it goes to the home page, which is the chat.
 ---
 
-<Base title={s.displayName} description={`${s.displayName}: ${s.statement}`} lang={lang} alternates={{ en: "/", ja: "/ja/" }}>
+<Base title={`${t("portfolio")} | ${s.displayName}`} description={`${s.displayName}: ${s.statement}`} lang={lang} alternates={{ en: "/work/", ja: "/ja/work/" }}>
   <main class="wrap">
-    <div class="topbar"><span></span><LangSwitch lang={lang} href={localePath(otherLang(lang), "/")} /></div>
+    <div class="topbar"><span></span><LangSwitch lang={lang} href={localePath(otherLang(lang), "/work/")} /></div>
     <header>
       <div class="id" data-enter style="--i:0">
         {photo ? (
@@ -52,7 +55,13 @@ const scholar = profile.links.find((l) => l.key === "scholar")!;
       <nav class="links" aria-label={t("contactNav")} data-enter style={`--i:${s.lede.length + 2}`}>
         <a class="pill pill--primary" href={primary.href}>{s.linkLabels[primary.key]}</a>
         <CopyEmail email={profile.email} label={t("copyEmail")} doneLabel={t("copied")} />
-        {otherLinks.map((l) => <a class="pill" href={l.href}>{s.linkLabels[l.key]}</a>)}
+        {otherLinks.map((l) =>
+          l.key === "chat" ? (
+            <a class="pill" href={localePath(lang, "/")} data-chat-open>{s.linkLabels[l.key]}</a>
+          ) : (
+            <a class="pill" href={l.href}>{s.linkLabels[l.key]}</a>
+          ),
+        )}
       </nav>
     </header>
 

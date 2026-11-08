@@ -12,5 +12,5 @@ const t = useTranslations(lang);
 
 <footer class="footer">
   <span>© {new Date().getFullYear()} {text[lang].displayName}</span>
-  <span><a href={localePath(lang, "/")}>{t("footerWork")}</a>&nbsp;&nbsp;&nbsp;<a href={`mailto:${profile.email}`}>{t("footerEmail")}</a></span>
+  <span><a href={localePath(lang, "/")}>{t("footerWork")}</a>&nbsp;&nbsp;&nbsp;<a href={localePath(lang, "/work/")}>{t("portfolio")}</a>&nbsp;&nbsp;&nbsp;<a href={`mailto:${profile.email}`}>{t("footerEmail")}</a></span>
 </footer>

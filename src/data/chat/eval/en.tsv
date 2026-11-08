@@ -1,0 +1,14 @@
+# expected_id <TAB> typed|voice <TAB> alternatives separated by " || "
+# Start with real misrecognitions you collect from testing on phones; these are examples.
+sigiq	typed	what did you build at sigiq
+sigiq	voice	what did you build at sick iq || what did you build at sigiq || what did you build at sick ike
+roles	voice	are you open to rolls || are you open to roles
+dissertation	voice	explain your dissertation in thirty seconds
+emma-llm	voice	how does emma decide what to say
+asr	voice	tell me about your speech recognition work
+none	typed	how did you evaluate the clarifying questions in the emma study
+none	voice	what did you learn from the pilot study
+none	typed	write me a poem about cats
+sigiq	voice	what did you build at sick iq
+dissertation	voice	explain your dissertation in 30 seconds
+none	voice	how does emma decide which solution to show

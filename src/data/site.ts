@@ -11,7 +11,7 @@ export const profile = {
     { key: "github", href: "https://github.com/akonoroshi" },
     { key: "scholar", href: "https://scholar.google.com/citations?user=0k3K65YAAAAJ&hl=en" },
     { key: "linkedin", href: "https://www.linkedin.com/in/yuya-asano-441373124/" },
-    { key: "chat", href: "#" }, // TODO: point at the chat landing page once it exists
+    { key: "chat", href: "/" }, // the home page is the chat; on the portfolio page this opens it in place
   ],
 } as const;
 
@@ -38,7 +38,7 @@ export const text: Record<Lang, SiteText> = {
       "I design, build, and evaluate LLM systems, from agent harnesses for multi-turn dialogue to LLM-as-judge evaluation pipelines and LLM features shipped in industry. At Pitt I built the LLM agent behind Emma, a teachable robot that students teach math to. At SigIQ.ai I built an LLM and retrieval pipeline and shipped a mastery model for a K-12 math tutor. I’m now building an AI learning companion for adults preparing for professional exams.",
       "Finishing my PhD in May 2027 and open to applied scientist, research scientist, and ML engineer roles.",
     ],
-    linkLabels: { cv: "CV (PDF)", github: "GitHub", scholar: "Google Scholar", linkedin: "LinkedIn", chat: "Talk to my AI companion (coming soon!)" },
+    linkLabels: { cv: "CV (PDF)", github: "GitHub", scholar: "Google Scholar", linkedin: "LinkedIn", chat: "Talk to my AI companion" },
     experience: [
       { org: "SigIQ.ai", role: "Machine learning intern", date: "May – Aug 2026",
         desc: "Built a two-stage LLM and retrieval pipeline that labels math lessons with the Common Core standards they cover (+.19–.33 macro F1 over the existing baseline), and shipped a Beta-Bernoulli mastery model as a teacher-facing feature." },

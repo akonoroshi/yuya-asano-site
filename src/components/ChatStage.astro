@@ -1,0 +1,206 @@
+---
+// The full-screen chat: the character fills the screen, with the top bar and the chat floating
+// over it. Used two ways, so both look and behave the same:
+//   mode="page"     the home page (/ and /ja/): the name is the page's <h1>, with links to the
+//                   portfolio and the other language
+//   mode="overlay"  inside the dialog opened from the corner character on every other page,
+//                   with a close button instead of those links
+import Chat from "./Chat.astro";
+import LangSwitch from "./LangSwitch.astro";
+import { text } from "../data/site";
+import type { Lang } from "../i18n/ui";
+import { localePath, otherLang, useTranslations } from "../i18n/utils";
+
+interface Props {
+  lang: Lang;
+  mode: "page" | "overlay";
+  /** Page key for page-specific starting chips; see faq.ts pageChips. */
+  chatPage?: string;
+}
+const { lang, mode, chatPage = mode === "page" ? "home" : "work" } = Astro.props;
+const t = useTranslations(lang);
+const s = text[lang];
+const page = mode === "page";
+---
+
+<div class:list={["chat-stage", `chat-stage--${mode}`]} data-chat-stage>
+  <div class="chat-stage-character" data-character-slot aria-hidden="true">
+    <!-- TODO: mount the VRM canvas here, sized to fill this element (the full viewport).
+         Show a poster image until the model loads, then dispatch window "character:loaded".
+         Listen for "chat:reply-start", "chat:tag", and "chat:reply-end" (see controller.ts).
+         In the dialog, load the model on window "chat:open" (detail.slot is this element) and
+         pause rendering on "chat:close". Frame the camera with the face in the upper half:
+         the chat covers roughly the bottom 40% of the screen. -->
+  </div>
+
+  <div class="chat-stage-ui">
+    <div class="chat-stage-top">
+      {page ? (
+        <h1 class="chat-stage-id">
+          <span class="chat-stage-name">{s.displayName}</span>
+          <span class="chat-stage-role">{s.role}</span>
+        </h1>
+      ) : (
+        <p class="chat-stage-id">
+          <span class="chat-stage-name">{t("companionName")}</span>
+          <span class="chat-stage-role">{t("chatCharacterRole")}</span>
+        </p>
+      )}
+      <div class="chat-stage-actions">
+        {page && (
+          <a class="chat-stage-pill" href={localePath(lang, "/work/")}>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 9h8M8 13h8M8 17h5"></path></svg>
+            <span class="chat-stage-label">{t("portfolio")}</span>
+          </a>
+        )}
+        <button type="button" class="chat-stage-pill" data-chat-transcript-toggle aria-controls={`chat-transcript-${lang}`} aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14v10H9l-4 4z"></path></svg>
+          <span class="chat-stage-label">{t("transcript")}</span>
+        </button>
+        {page ? (
+          <LangSwitch lang={lang} href={localePath(otherLang(lang), "/")} />
+        ) : (
+          <button type="button" class="chat-stage-pill" data-chat-close aria-label={t("closeChat")} title={t("closeChat")}>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        )}
+      </div>
+    </div>
+
+    <div class="chat-stage-dock">
+      {page && (
+        <noscript>
+          <p class="chat-stage-noscript">{t("chatNoScript")} <a class="inline" href={localePath(lang, "/work/")}>{t("portfolio")}</a></p>
+        </noscript>
+      )}
+      <Chat lang={lang} lazy={!page} page={chatPage} />
+    </div>
+  </div>
+</div>
+
+<style is:global>
+  /* Global so the same rules apply inside the dialog's top layer; every selector starts with
+     .chat-stage. Surfaces over the character are opaque so text stays readable. */
+  .chat-stage {
+    position: fixed;
+    inset: 0;
+    background: var(--paper);
+  }
+  .chat-stage-character {
+    position: absolute;
+    inset: 0;
+  }
+  .chat-stage-character canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  /* Clicks on empty parts of the UI layer reach the character, in case it becomes interactive. */
+  .chat-stage-ui {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 16px;
+    padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    pointer-events: none;
+  }
+  .chat-stage-top > *,
+  .chat-stage-dock > * {
+    pointer-events: auto;
+  }
+  .chat-stage-dock .chat > * {
+    pointer-events: auto;
+  }
+  .chat-stage-dock .chat {
+    pointer-events: none;
+  }
+
+  .chat-stage-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .chat-stage .chat-stage-id {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: min(28rem, 60%);
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: 0;
+  }
+  .chat-stage-name {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .chat-stage-role {
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+  .chat-stage-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .chat-stage-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    min-width: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 160ms var(--ease-out);
+  }
+  .chat-stage-pill:hover {
+    background: var(--hover);
+  }
+  .chat-stage .lang-switch {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 12px;
+    background: var(--surface);
+  }
+  .chat-stage .lang-switch:hover {
+    background: var(--hover);
+  }
+  /* On phones the pills show icons only; the label stays for screen readers. */
+  @media (max-width: 560px) {
+    .chat-stage-pill:has(.chat-stage-label) {
+      padding: 0;
+      justify-content: center;
+      width: 34px;
+    }
+    .chat-stage-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+  .chat-stage .chat-stage-noscript {
+    max-width: 36rem;
+    margin: 0 auto 8px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: var(--surface);
+    font-size: 15px;
+  }
+</style>

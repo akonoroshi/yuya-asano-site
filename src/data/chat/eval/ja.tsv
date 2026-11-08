@@ -1,0 +1,7 @@
+# expected_id <TAB> typed|voice <TAB> alternatives separated by " || "
+# 実機で集めた誤認識の例に置き換えてください。
+sigiq	voice	シグアイキューでは何を作りましたか
+roles	voice	求職中ですか
+dissertation	voice	博士研究を三十秒で説明して
+none	typed	Emmaの研究で明確化の質問はどう評価しましたか
+none	typed	猫の詩を書いて

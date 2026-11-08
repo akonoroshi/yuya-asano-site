@@ -3,6 +3,7 @@
 // Japanese text uses the visitor's system fonts (see :lang(ja) in global.css).
 import "@fontsource-variable/hanken-grotesk";
 import "../styles/global.css";
+import ChatLauncher from "../components/ChatLauncher.astro";
 import type { Lang } from "../i18n/ui";
 
 interface Props {
@@ -11,8 +12,12 @@ interface Props {
   lang: Lang;
   /** Paths of this page in each language, for hreflang tags. */
   alternates?: Record<Lang, string>;
+  /** Show the corner character that opens the chat. Off on the home page, which is the chat. */
+  chat?: boolean;
+  /** Page key for the chat's starting chips ("project:<id>", "publications"); see faq.ts pageChips. */
+  chatPage?: string;
 }
-const { title, description, lang, alternates } = Astro.props;
+const { title, description, lang, alternates, chat = true, chatPage } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 ---
 
@@ -43,6 +48,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
   </head>
   <body>
     <slot />
+    {chat && <ChatLauncher lang={lang} chatPage={chatPage} />}
     <script>
       // Open links to other sites (and PDFs) in a new tab. Runs once per page and covers
       // every link, including ones written by hand in project Markdown files.

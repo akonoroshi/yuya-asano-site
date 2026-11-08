@@ -1,0 +1,22 @@
+---
+// The home page, shared by / and /ja/: the full-screen chat with the character.
+// It is the page's main content (not a pop-up over another page), so it doesn't count as an
+// intrusive interstitial for visitors arriving from search. The portfolio is at /work/.
+import Base from "../layouts/Base.astro";
+import ChatStage from "../components/ChatStage.astro";
+import { text } from "../data/site";
+import type { Lang } from "../i18n/ui";
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const s = text[lang];
+const description = lang === "ja" ? `${s.displayName}：${s.statement}。${s.role}。` : `${s.displayName}: ${s.statement} ${s.role}.`;
+---
+
+<Base title={s.displayName} description={description} lang={lang} alternates={{ en: "/", ja: "/ja/" }} chat={false}>
+  <main>
+    <ChatStage lang={lang} mode="page" />
+  </main>
+</Base>

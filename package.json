@@ -6,19 +6,29 @@
     "node": ">=24"
   },
   "scripts": {
+    "predev": "node scripts/chat/build-context.mjs",
     "dev": "astro dev",
+    "prebuild": "node scripts/chat/build-context.mjs",
     "build": "astro build",
-    "preview": "astro build && wrangler dev",
-    "deploy": "astro build && wrangler deploy",
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm run build && wrangler deploy",
     "upgrade:astro": "npx @astrojs/upgrade",
     "upgrade:check": "npm outdated",
     "sync:publications": "node scripts/sync-publications.mjs",
-    "clean": "rm -rf dist .astro node_modules/.vite",
-    "dev:fresh": "npm run clean && astro dev"
+    "chat:context": "node scripts/chat/build-context.mjs",
+    "chat:paraphrase": "node scripts/chat/paraphrase.mjs",
+    "chat:index": "node scripts/chat/index-content.mjs",
+    "chat:eval": "node scripts/chat/eval-router.mjs",
+    "test:chat": "node --test \"tests/chat/*.test.ts\"",
+    "cf-typegen": "wrangler types",
+    "clean": "rm -rf dist .astro node_modules/.vite public/chat",
+    "dev:fresh": "npm run clean && npm run dev"
   },
   "dependencies": {
     "@fontsource-variable/hanken-grotesk": "^5.0.0",
-    "astro": "^7.4.5"
+    "astro": "^7.4.5",
+    "cmu-pronouncing-dictionary": "^3.0.0",
+    "kuromoji": "^0.1.2"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

@@ -1,0 +1,713 @@
+---
+// The chat over the full-screen character: one caption for the current reply, a row of
+// suggested-question chips that changes with the conversation, a slim input bar, and the full
+// conversation in a transcript drawer. Talks to the 3D character only through window events, so either can load
+// or fail without the other:
+//   chat:reply-start / chat:reply-end           a reply begins / ends (with its plain and tagged text)
+//   chat:tag   { kind: "act" | "emo", name, strength?, at }   a behavior tag the text just reached
+//   character:loaded                            (dispatched by the character) start loading voice dictionaries
+import type { Lang } from "../i18n/ui";
+
+interface Props {
+  lang: Lang;
+  /** Wait for a "chat:init" event before loading anything (used by the corner launcher). */
+  lazy?: boolean;
+  /** Which page the chat is on, for page-specific starting chips (faq.ts pageChips). */
+  page?: string;
+}
+const { lang, lazy = false, page = "home" } = Astro.props;
+
+const strings = {
+  en: {
+    region: "Chat with Shino, Yuya's AI companion",
+    disclosure: "Shino is an AI companion, not Yuya. Answers come from his site and papers, and can be wrong.",
+    intro: "Welcome to Yuya's website! I'm Shino, Yuya's AI companion. Ask me about his research, projects, or experience.",
+    introProject: "Welcome to Yuya's website! I'm Shino, Yuya's AI companion. Ask me about this project, or anything else about Yuya.",
+    label: "Your question",
+    placeholder: "Ask anything about Yuya's work",
+    send: "Send",
+    micStart: "Ask by voice",
+    micStop: "Stop listening",
+    suggested: "Suggested questions",
+    sources: "Sources",
+    // Shino's conversational lines: friendly and upbeat (her personality lives here, not in the
+    // factual answers). Lines a visitor can hear several times in one conversation get a few
+    // phrasings, so she doesn't sound scripted. They carry no facts. {q} is the matched question.
+    didYouMean: ["Wait, did you mean “{q}”?", "Just checking: did you mean “{q}”?", "Hmm, I want to make sure I heard you right. Did you mean “{q}”?"],
+    yes: "Yes",
+    somethingElse: "Something else",
+    somethingElseReply: [
+      "Got it! What do you want to know next?",
+      "Sure! What should we talk about next?",
+      "Okay! Pick a topic below, or ask me anything about Yuya.",
+    ],
+    // Said before a curated answer the visitor already heard in this conversation.
+    repeatLeadIn: ["Like I said earlier:", "Here it is again:", "Quick recap of what I said:"],
+    askAsSaid: "Ask what I said",
+    youAsked: "You asked:",
+    transcript: "Transcript",
+    closeTranscript: "Close transcript",
+    voiceLocal: "Voice is transcribed on your device.",
+    voiceCloud: "Voice is transcribed by your browser's speech service.",
+    loadFailed: "The chat didn't load. Refresh the page to try again.",
+    listen: {
+      "not-allowed": "Microphone access is blocked. Allow it in your browser settings, or type your question.",
+      "no-speech": "No speech was detected. Tap the microphone and try again.",
+      unavailable: "Voice input isn't available right now. Type your question instead.",
+    },
+    // Shown in Shino's caption, so they're in her voice too, but still say exactly what to do.
+    errors: {
+      rate_limited: "Whoa, that's a lot of questions at once! Give me a minute, then try again.",
+      turn_limit: "We've talked a lot! Refresh the page to start a new conversation.",
+      daily_limit: "I've answered all the new questions I can for today. Try a suggested question, or email Yuya.",
+      too_long: "That's a long question! Could you keep it under 500 characters?",
+      unavailable: "Sorry, I couldn't answer that just now. Try a suggested question, or email Yuya.",
+      bad_request: "Sorry, I couldn't answer that just now. Try a suggested question, or email Yuya.",
+      interrupted: "Oops, my answer got cut off. Could you ask again?",
+    },
+  },
+  ja: {
+    region: "浅野のAIコンパニオン、しのと話す",
+    disclosure: "しのはAIコンパニオンで、浅野本人ではありません。答えはサイトと論文にもとづきますが、誤りを含むことがあります。",
+    intro: "浅野のサイトへようこそ！浅野のAIコンパニオン、しのです。研究やプロジェクト、経歴のこと、なんでも聞いてくださいね！",
+    introProject: "浅野のサイトへようこそ！浅野のAIコンパニオン、しのです。このプロジェクトのことも、浅野のほかのことも、なんでも聞いてくださいね！",
+    label: "質問",
+    placeholder: "浅野について何でも質問する",
+    send: "送信",
+    micStart: "音声で質問",
+    micStop: "聞き取りを止める",
+    suggested: "おすすめの質問",
+    sources: "出典",
+    didYouMean: ["「{q}」という質問で合っていますか？", "確認させてくださいね。「{q}」という質問ですか？", "聞き間違えていたらごめんなさい。「{q}」という質問でしょうか？"],
+    yes: "はい",
+    somethingElse: "ほかのこと",
+    somethingElseReply: [
+      "了解です！次は何が知りたいですか？",
+      "わかりました！次は何のお話をしましょうか？",
+      "もちろんです！下から選ぶか、浅野のことをなんでも聞いてくださいね。",
+    ],
+    repeatLeadIn: ["さっきもお話しした内容ですね。", "もう一度お伝えしますね！", "おさらいしますね。"],
+    askAsSaid: "話したとおりに質問する",
+    youAsked: "質問：",
+    transcript: "会話の履歴",
+    closeTranscript: "履歴を閉じる",
+    voiceLocal: "音声はお使いの端末内で文字に変換されます。",
+    voiceCloud: "音声はブラウザの音声認識サービスで文字に変換されます。",
+    loadFailed: "チャットを読み込めませんでした。ページを再読み込みしてください。",
+    listen: {
+      "not-allowed": "マイクへのアクセスがブロックされています。ブラウザの設定で許可するか、文字で入力してください。",
+      "no-speech": "音声が検出されませんでした。マイクをタップしてもう一度話してください。",
+      unavailable: "現在、音声入力を利用できません。文字で入力してください。",
+    },
+    errors: {
+      rate_limited: "わっ、質問がたくさん届いています！1分ほど待ってから、もう一度聞いてくださいね。",
+      turn_limit: "たくさんお話ししましたね！ページを再読み込みすると、新しい会話を始められます。",
+      daily_limit: "今日お答えできる新しい質問は、ここまでなんです。おすすめの質問を試すか、メールでお問い合わせくださいね。",
+      too_long: "長い質問ですね！500文字以内にまとめてもらえますか？",
+      unavailable: "ごめんなさい、今はお答えできませんでした。おすすめの質問を試すか、メールでお問い合わせくださいね。",
+      bad_request: "ごめんなさい、今はお答えできませんでした。おすすめの質問を試すか、メールでお問い合わせくださいね。",
+      interrupted: "あっ、答えが途中で切れてしまいました。もう一度聞いてもらえますか？",
+    },
+  },
+}[lang];
+const intro = page.startsWith("project:") ? strings.introProject : strings.intro;
+---
+
+<section class="chat" data-chat data-lang={lang} data-chat-lazy={lazy ? "" : undefined} data-chat-page={page} aria-label={strings.region}>
+  <p class="chat-asked" data-asked hidden><span class="chat-sr">{strings.youAsked} </span><span data-asked-text></span></p>
+  <!-- About four lines tall so the reply never covers much of the character. Replies stream in
+       and the caption follows the newest text; tabindex lets keyboard users scroll back. -->
+  <div class="chat-caption" data-caption aria-live="polite" tabindex="0">
+    <div class="msg-text">{intro}</div>
+  </div>
+  <div class="chat-chips" data-chips role="group" aria-label={strings.suggested}></div>
+  <form class="chat-input" data-form>
+    <label class="chat-sr" for={`chat-q-${lang}`}>{strings.label}</label>
+    <textarea id={`chat-q-${lang}`} rows="1" maxlength="500" placeholder={strings.placeholder} data-input></textarea>
+    <button type="button" class="chat-icon" data-mic hidden aria-pressed="false" aria-label={strings.micStart} title={strings.micStart}>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+        <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"></path>
+      </svg>
+    </button>
+    <button type="submit" class="chat-icon chat-send" data-send aria-label={strings.send} title={strings.send}>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 19V5M6 11l6-6 6 6"></path>
+      </svg>
+    </button>
+  </form>
+  <div class="chat-note">
+    <span>{strings.disclosure}</span>
+    <span data-status hidden></span>
+  </div>
+  <aside class="chat-transcript" id={`chat-transcript-${lang}`} data-transcript hidden aria-label={strings.transcript}>
+    <div class="chat-transcript-head">
+      <span>{strings.transcript}</span>
+      <button type="button" class="chat-icon" data-transcript-close aria-label={strings.closeTranscript} title={strings.closeTranscript}>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </button>
+    </div>
+    <ol class="chat-log" data-log>
+      <li class="msg msg--agent"><div class="msg-text">{intro}</div></li>
+    </ol>
+  </aside>
+  <script type="application/json" data-strings set:html={JSON.stringify(strings)} />
+</section>
+
+<script>
+  import { canRecognizeLocally, Listener, speechSupported, type ListenError } from "../lib/chat/asr.ts";
+  import { ChatController, type ChatStrings, type ReplyView } from "../lib/chat/controller.ts";
+  import type { Lang, Link } from "../lib/chat/types.ts";
+
+  type Strings = ChatStrings & {
+    sources: string;
+    micStart: string;
+    micStop: string;
+    voiceLocal: string;
+    voiceCloud: string;
+    loadFailed: string;
+    listen: Record<ListenError, string>;
+  };
+
+  // The home page starts the chat right away. The chat behind the corner launcher waits until
+  // it is opened, so other pages don't download the FAQ data or dictionaries until then.
+  for (const root of document.querySelectorAll<HTMLElement>("[data-chat]")) {
+    if (root.hasAttribute("data-chat-lazy")) root.addEventListener("chat:init", () => setup(root), { once: true });
+    else setup(root);
+  }
+
+  function setup(root: HTMLElement) {
+    const lang = root.dataset.lang as Lang;
+    const s = JSON.parse(root.querySelector("[data-strings]")!.textContent!) as Strings;
+    const $ = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
+    const asked = $<HTMLElement>("[data-asked]");
+    const askedText = $<HTMLElement>("[data-asked-text]");
+    const caption = $<HTMLElement>("[data-caption]");
+    const chips = $<HTMLElement>("[data-chips]");
+    const form = $<HTMLFormElement>("[data-form]");
+    const input = $<HTMLTextAreaElement>("[data-input]");
+    const send = $<HTMLButtonElement>("[data-send]");
+    const mic = $<HTMLButtonElement>("[data-mic]");
+    const status = $<HTMLElement>("[data-status]");
+    const transcript = $<HTMLElement>("[data-transcript]");
+    // The toggle lives in the top bar of ChatStage.astro, outside this component.
+    const openBtn = (root.closest("[data-chat-stage]") ?? document).querySelector<HTMLButtonElement>("[data-chat-transcript-toggle]");
+    const log = $<HTMLOListElement>("[data-log]");
+
+    const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string) => {
+      const e = document.createElement(tag);
+      e.className = cls;
+      if (text) e.textContent = text;
+      return e;
+    };
+    const anchor = (l: Link) => {
+      const a = el("a", "inline", l.label);
+      a.href = l.href;
+      // Same rule as Base.astro: other sites and PDFs open in a new tab.
+      if (!l.href.startsWith("/") || l.href.endsWith(".pdf")) {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      }
+      return a;
+    };
+    /** Plain text with [label](url) links; everything else stays text, never HTML. */
+    const renderText = (target: HTMLElement, text: string) => {
+      target.replaceChildren();
+      const re = /\[([^\]]+)\]\(((?:https?:\/\/|\/)[^)\s]+)\)/g;
+      let at = 0;
+      for (const m of text.matchAll(re)) {
+        target.append(text.slice(at, m.index), anchor({ label: m[1], href: m[2] }));
+        at = m.index! + m[0].length;
+      }
+      target.append(text.slice(at));
+    };
+    const extras = (target: HTMLElement, extra?: { links?: Link[]; sources?: Link[] }) => {
+      if (extra?.links?.length) {
+        const row = el("p", "msg-links");
+        row.append(...extra.links.map(anchor));
+        target.append(row);
+      }
+      if (extra?.sources?.length) {
+        const row = el("p", "msg-sources", `${s.sources}: `);
+        extra.sources.forEach((l, i) => row.append(...(i ? [", ", anchor(l)] : [anchor(l)])));
+        target.append(row);
+      }
+    };
+    const scrollLog = () => log.scrollTo({ top: log.scrollHeight });
+    // While a reply streams in, the caption follows the newest text, like subtitles. If the
+    // visitor scrolls up to reread, it stops following until they scroll back to the bottom.
+    // A fade at the bottom edge shows there is more text below.
+    let follow = true;
+    const fromBottom = () => caption.scrollHeight - caption.clientHeight - caption.scrollTop;
+    const updateCaption = () => caption.classList.toggle("has-more", fromBottom() > 2);
+    caption.addEventListener(
+      "scroll",
+      () => {
+        follow = fromBottom() <= 4;
+        updateCaption();
+      },
+      { passive: true },
+    );
+    const followCaption = () => {
+      if (follow) caption.scrollTop = caption.scrollHeight;
+      updateCaption();
+    };
+    new ResizeObserver(updateCaption).observe(caption);
+
+    /* ---------- Transcript drawer ---------- */
+    const setTranscript = (open: boolean) => {
+      transcript.hidden = !open;
+      openBtn?.setAttribute("aria-expanded", String(open));
+      if (open) {
+        scrollLog();
+        $<HTMLButtonElement>("[data-transcript-close]").focus();
+      } else openBtn?.focus();
+    };
+    openBtn?.addEventListener("click", () => setTranscript(transcript.hasAttribute("hidden")));
+    // Esc closes the transcript first; only a second Esc closes the full-screen chat dialog.
+    const isOpen = () => !transcript.hasAttribute("hidden");
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && isOpen()) {
+        e.preventDefault();
+        e.stopPropagation();
+        setTranscript(false);
+      }
+    }, { capture: true });
+    root.closest("dialog")?.addEventListener("cancel", (e) => {
+      if (isOpen()) e.preventDefault();
+    });
+    root.closest("dialog")?.addEventListener("close", () => {
+      transcript.hidden = true;
+      openBtn?.setAttribute("aria-expanded", "false");
+    });
+    $<HTMLButtonElement>("[data-transcript-close]").addEventListener("click", () => setTranscript(false));
+
+    const controller = new ChatController(
+      lang,
+      {
+        showQuestion(text) {
+          askedText.textContent = text;
+          asked.hidden = false;
+          const li = el("li", "msg msg--user");
+          li.append(el("div", "msg-text", text));
+          log.append(li);
+          scrollLog();
+        },
+        startReply(): ReplyView {
+          // The caption shows only the current reply; the transcript keeps every reply.
+          const capText = el("div", "msg-text");
+          caption.replaceChildren(capText);
+          caption.scrollTop = 0;
+          follow = true;
+          caption.classList.add("is-pending");
+          const li = el("li", "msg msg--agent");
+          const logText = el("div", "msg-text");
+          li.append(logText);
+          log.append(li);
+          let raw = "";
+          return {
+            append(t) {
+              caption.classList.remove("is-pending");
+              raw += t;
+              capText.textContent = logText.textContent = raw.trimStart();
+              followCaption();
+              scrollLog();
+            },
+            finish(extra) {
+              caption.classList.remove("is-pending");
+              renderText(capText, raw.trim());
+              renderText(logText, raw.trim());
+              extras(caption, extra);
+              extras(li, extra);
+              followCaption();
+              scrollLog();
+            },
+            fail(message) {
+              caption.classList.remove("is-pending");
+              if (raw.trim()) {
+                renderText(capText, raw.trim());
+                renderText(logText, raw.trim());
+              }
+              caption.append(el("p", "msg-error", message));
+              li.append(el("p", "msg-error", message));
+              followCaption();
+            },
+          };
+        },
+        setChips(list) {
+          chips.replaceChildren(
+            ...list.map((c) => {
+              const b = el("button", c.kind === "confirm" ? "chat-chip chat-chip--confirm" : "chat-chip", c.label);
+              b.type = "button";
+              b.addEventListener("click", () => {
+                if (!controller.isBusy()) c.onPick();
+              });
+              return b;
+            }),
+          );
+        },
+        setBusy(busy) {
+          send.disabled = busy;
+          chips.toggleAttribute("aria-disabled", busy);
+          root.toggleAttribute("aria-busy", busy);
+        },
+      },
+      s,
+      root.dataset.chatPage,
+    );
+
+    /* ---------- Text input ---------- */
+    let voice: { top: string; alternatives: string[] } | null = null;
+    const grow = () => {
+      input.style.height = "auto";
+      input.style.height = `${input.scrollHeight}px`;
+    };
+    input.addEventListener("input", grow);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text || controller.isBusy()) return;
+      // Spoken and unedited: pass the recognizer's alternatives on. Edited: treat as typed.
+      const opts = voice && voice.top === text ? { source: "voice" as const, alternatives: voice.alternatives } : { source: "typed" as const };
+      voice = null;
+      input.value = "";
+      grow();
+      controller.ask(text, opts);
+    });
+
+    /* ---------- Load the FAQ (this also shows the first chips), then voice ---------- */
+    controller.load().then(
+      (ctx) => {
+        if (speechSupported()) setupVoice(ctx.phrases);
+      },
+      () => {
+        status.textContent = s.loadFailed;
+        status.hidden = false;
+      },
+    );
+
+    function setupVoice(phrases: string[]) {
+      mic.hidden = false;
+      canRecognizeLocally(lang).then((local) => {
+        status.textContent = local ? s.voiceLocal : s.voiceCloud;
+        status.hidden = false;
+      });
+      // Load the pronunciation dictionary once the character is in, or after a few seconds.
+      const warm = () => controller.warmPhonemes();
+      window.addEventListener("character:loaded", warm, { once: true });
+      setTimeout(warm, 6000);
+
+      let listener: Listener | null = null;
+      const setListening = (on: boolean) => {
+        mic.setAttribute("aria-pressed", String(on));
+        mic.setAttribute("aria-label", on ? s.micStop : s.micStart);
+        mic.title = on ? s.micStop : s.micStart;
+        root.classList.toggle("is-listening", on);
+      };
+      mic.addEventListener("click", async () => {
+        if (listener) return listener.stop();
+        warm();
+        input.value = "";
+        grow();
+        listener = new Listener(lang, phrases, (interim) => {
+          input.value = interim;
+          grow();
+        });
+        setListening(true);
+        try {
+          const { alternatives } = await listener.start();
+          input.value = alternatives[0];
+          voice = { top: alternatives[0], alternatives };
+          grow();
+          input.focus();
+        } catch (e) {
+          const code = (typeof e === "string" && e in s.listen ? e : "unavailable") as ListenError;
+          status.textContent = s.listen[code];
+          status.hidden = false;
+          input.value = "";
+          grow();
+        } finally {
+          listener = null;
+          setListening(false);
+        }
+      });
+    }
+  }
+</script>
+
+<style is:global>
+  /* Global because the caption, chips, and transcript are filled by script (scoped styles
+     wouldn't reach them); every selector is prefixed with .chat. Uses the site's tokens from
+     global.css: visitor = learner color, character = agent color, as in the conversation
+     replays. Everything floats over the full-screen character, so every surface is opaque. */
+  .chat {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 36rem;
+    margin-inline: auto;
+    font-family: var(--font);
+  }
+
+  .chat .chat-asked {
+    align-self: center;
+    max-width: 100%;
+    margin: 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink-2);
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chat .chat-caption {
+    /* About four lines of text; longer replies scroll inside the caption. */
+    max-height: min(20vh, 7.5rem); /* for browsers without the lh unit */
+    max-height: min(20vh, calc(4lh + 20px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: var(--agent-soft);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .chat .chat-caption.has-more {
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6em), transparent);
+  }
+  .chat .msg-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .chat .chat-caption.is-pending .msg-text::after {
+    content: "···";
+    letter-spacing: 2px;
+    color: var(--agent);
+    animation: chat-pulse 1.2s var(--ease-in-out) infinite;
+  }
+  .chat .msg-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+  }
+  .chat .msg-links,
+  .chat .msg-sources {
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+  .chat .msg-error {
+    margin-top: 6px;
+    font-size: 14px;
+    color: var(--ink-2);
+  }
+
+  /* Several short chips per row; on narrow phones they wrap to a second row at most. */
+  .chat .chat-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+  .chat .chat-chips:empty {
+    display: none;
+  }
+  .chat .chat-chip {
+    min-height: 32px;
+    padding: 5px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 160ms var(--ease-out), border-color 160ms var(--ease-out);
+  }
+  .chat .chat-chip:hover {
+    background: var(--hover);
+  }
+  .chat .chat-chip--confirm {
+    border-color: var(--agent);
+  }
+  .chat .chat-chips[aria-disabled] .chat-chip {
+    color: var(--ink-3);
+    cursor: default;
+  }
+
+  .chat .chat-input {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    transition: border-color 160ms var(--ease-out);
+  }
+  .chat .chat-input:focus-within {
+    border-color: var(--ink-3);
+  }
+  .chat .chat-input textarea {
+    flex: 1;
+    min-height: 32px;
+    max-height: 6rem;
+    padding: 5px 8px;
+    border: 0;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 16px; /* 16px keeps iOS Safari from zooming in on focus */
+    line-height: 1.4;
+  }
+  .chat .chat-icon {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--ink-2);
+    cursor: pointer;
+    transition: background-color 160ms var(--ease-out), color 160ms var(--ease-out);
+  }
+  .chat .chat-icon:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .chat .chat-send {
+    background: var(--ink);
+    color: var(--surface);
+  }
+  .chat .chat-send:hover {
+    background: var(--ink-2);
+    color: var(--surface);
+  }
+  .chat .chat-send:disabled {
+    background: var(--line);
+    color: var(--ink-3);
+    cursor: default;
+  }
+  .chat.is-listening [data-mic] {
+    background: var(--learner);
+    color: var(--surface);
+    animation: chat-ring 1.4s var(--ease-out) infinite;
+  }
+
+  .chat .chat-note {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: baseline;
+    gap: 0 10px;
+    padding: 0 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    text-align: center;
+  }
+  /* The full conversation, on demand, opening under the Transcript button in the top bar:
+     a side panel on wide screens, a sheet across the top on phones. */
+  .chat .chat-transcript {
+    position: fixed;
+    z-index: 2;
+    inset: 56px 8px auto;
+    max-height: min(70dvh, calc(100dvh - 72px));
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+  }
+  .chat .chat-transcript[hidden] {
+    display: none;
+  }
+  @media (min-width: 720px) {
+    .chat .chat-transcript {
+      inset: 56px 16px 16px auto;
+      width: 24rem;
+      max-height: none;
+    }
+  }
+  .chat .chat-transcript-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 8px 8px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+    font-weight: 550;
+    color: var(--ink);
+  }
+  .chat .chat-log {
+    list-style: none;
+    margin: 0;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .chat .msg {
+    max-width: 88%;
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  .chat .msg--agent {
+    align-self: flex-start;
+    background: var(--agent-soft);
+    border-bottom-left-radius: 4px;
+  }
+  .chat .msg--user {
+    align-self: flex-end;
+    background: var(--learner-soft);
+    border-bottom-right-radius: 4px;
+  }
+
+  .chat :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .chat .chat-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  @keyframes chat-pulse {
+    50% { opacity: 0.35; }
+  }
+  @keyframes chat-ring {
+    from { box-shadow: 0 0 0 0 var(--learner-soft); }
+    to { box-shadow: 0 0 0 10px transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chat .chat-caption.is-pending .msg-text::after,
+    .chat.is-listening [data-mic] {
+      animation: none;
+    }
+  }
+</style>

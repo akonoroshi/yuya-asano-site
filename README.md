@@ -1,7 +1,21 @@
 # yuya-asano-site
 
 Personal site built with **Astro 7** (static output) and deployed to **Cloudflare Workers** static assets.
-Runtime dependencies are kept to two (Astro and a self-hosted font) so there is very little to patch.
+Runtime dependencies are kept small: Astro, a self-hosted font, and two dictionaries for the chat's
+voice input (CMUdict for English, kuromoji for Japanese).
+
+## Pages
+
+| URL | Page |
+| --- | --- |
+| `/`, `/ja/` | Home: full-screen chat with your AI companion (`src/views/ChatView.astro`) |
+| `/work/`, `/ja/work/` | Portfolio: intro, projects, experience, papers, education (`src/views/HomeView.astro`) |
+| `/projects/<id>/` | One page per project |
+| `/publications/` | All papers by year |
+
+Every page except the home page has a small character in the bottom-right corner. Clicking it
+opens the same full-screen chat, and the conversation continues where the visitor left it (per
+browser tab). How the chat works, how to set it up, and how to tune it: **[README-chat.md](README-chat.md)**.
 
 ## First-time setup
 
@@ -33,7 +47,7 @@ No Homebrew? Install Node 26 LTS with the macOS installer from nodejs.org instea
 ### 2. Install and run
 
 ```bash
-npm install         # creates package-lock.json; commit it
+npm install         # creates or updates package-lock.json; commit it
 npm run dev         # http://localhost:4321
 ```
 
@@ -65,7 +79,7 @@ Project frontmatter is validated by `src/content.config.ts`. If you mistype a fi
 
 ## English and Japanese
 
-English pages live at `/`, Japanese pages at `/ja/` (for example `/ja/projects/emma-agent/`). Every page has a switch in the top right that opens the same page in the other language.
+English pages live at `/`, Japanese pages at `/ja/` (for example `/ja/projects/emma-agent/`, `/ja/work/`). Every page has a switch in the top right that opens the same page in the other language.
 
 | To change | Edit |
 | --- | --- |
@@ -81,7 +95,7 @@ Japanese text uses the visitor's built-in Japanese font (Hiragino on Mac and iPh
 
 ## Publications (synced from Google Scholar)
 
-`src/data/publications.json` holds every paper. The main page automatically shows the **5 most recent papers where you are the first author**, and `/publications/` lists all of them by year. Change the count, or whether arXiv preprints can appear on the main page, in `src/data/publications.ts`.
+`src/data/publications.json` holds every paper. The portfolio page automatically shows the **5 most recent papers where you are the first author**, and `/publications/` lists all of them by year. Change the count, or whether arXiv preprints can appear on the portfolio page, in `src/data/publications.ts`.
 
 **New papers are added automatically** by a weekly GitHub Action (`.github/workflows/sync-publications.yml`). Google Scholar has no official API and blocks automated requests, so the sync goes through SerpApi's Google Scholar Author API. It only adds papers that aren't already in the JSON; it never overwrites your edits.
 
@@ -97,7 +111,7 @@ When a new paper arrives, Scholar's data can be rough (abbreviated venue, trunca
 - `href`: link to the paper (DOI or ACL Anthology); `code` and `arxiv` add extra links
 - `award`: e.g. `"Best paper"`
 - `hidden: true`: hide a duplicate or a paper you don't want listed
-- Delete `preprint: true` once an arXiv paper is published, so it can appear on the main page
+- Delete `preprint: true` once an arXiv paper is published, so it can appear on the portfolio page
 
 To run the sync locally: `SERPAPI_KEY=... npm run sync:publications`.
 
@@ -130,17 +144,23 @@ src/
   content/projects/ja/*.md     Japanese text for the same projects
   data/site.ts                 links, email, and English/Japanese profile text
   data/publications.json       every paper (synced from Google Scholar, hand-editable)
-  data/publications.ts         picks the recent first-author papers for the main page
+  data/publications.ts         picks the recent first-author papers for the portfolio page
+  data/chat/                   chat answers (faq.ts), terms, fact sheet, test sets (see README-chat.md)
+  lib/chat/                    chat logic shared by the browser, build scripts, and tests
   i18n/ui.ts                   interface text in both languages
   i18n/utils.ts                translation and URL helpers
   lib/projects.ts              merges Japanese project text over the English files
-  views/                       the main, project, and publications pages (shared by both languages)
+  views/                       the home (chat), portfolio, project, and publications pages (shared by both languages)
   pages/                       English routes; pages/ja/ holds the Japanese routes
-  components/                  Replay, AsrDemo, PubList, LangSwitch, CopyEmail, Footer
-  layouts/Base.astro           <head>, hreflang tags, fonts, new-tab links
+  components/                  Replay, AsrDemo, PubList, LangSwitch, CopyEmail, Footer,
+                               Chat, ChatStage (full-screen layout), ChatLauncher (corner character)
+  layouts/Base.astro           <head>, hreflang tags, fonts, new-tab links, corner character
   styles/global.css            design tokens and all styles, including Japanese typography
   assets/photo.jpg             your photo (add it)
 scripts/sync-publications.mjs  adds new papers from Google Scholar
+scripts/chat/                  builds the chat's browser data, paraphrases, retrieval index, eval
+worker/                        /api/chat (retrieval + LLM) on Cloudflare Workers
+tests/chat/                    unit tests for the chat (npm run test:chat)
 pitt-redirect/index.html       upload to Pitt AFS so the old URL forwards here
 ```
 
@@ -158,6 +178,9 @@ The dev server's cache, or an open browser tab, still refers to a component that
 
 Links to other sites, and PDFs, open in a new tab automatically (a small script in `src/layouts/Base.astro`). Links within the site open in the same tab. This also covers links you write in project Markdown files.
 
-## Adding the chat backend later
+## Chat
 
-Keep the portfolio static. Add a Worker at `worker/index.ts` for `/api/chat`, then in `wrangler.jsonc` set `"main": "./worker/index.ts"` and, inside `"assets"`, `"run_worker_first": ["/api/*"]`, so only API calls count toward the Workers request quota.
+The home page is the chat; the API behind it is the Worker in `worker/`, which only runs for
+`/api/*` (`run_worker_first` in `wrangler.jsonc`), so static pages never count toward the Workers
+request quota. Setup steps (Vectorize index, Gemini key, retrieval index), tuning, and the review
+loop are in [README-chat.md](README-chat.md).

@@ -29,10 +29,10 @@ const html = project.entry.rendered?.html;
 const parts = data.replays && html ? html.split(SLOT) : null; // [html, name, html, name, ...]
 ---
 
-<Base title={`${data.title} | ${text[lang].displayName}`} description={data.subtitle} lang={lang} alternates={{ en: path, ja: `/ja${path}` }}>
+<Base title={`${data.title} | ${text[lang].displayName}`} description={data.subtitle} lang={lang} alternates={{ en: path, ja: `/ja${path}` }} chatPage={`project:${project.id}`}>
   <main class="wrap wrap--project">
     <div class="topbar">
-      <a class="back" href={localePath(lang, "/")}>
+      <a class="back" href={localePath(lang, "/work/")}>
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"></path></svg>
         {text[lang].displayName}
       </a>

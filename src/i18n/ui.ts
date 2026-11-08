@@ -25,6 +25,15 @@ const en = {
   fallbackNotice: "This page is only available in English.",
   switchLabel: "Read this page in Japanese",
   contactNav: "Contact and profiles",
+  portfolio: "Portfolio",
+  transcript: "Transcript",
+  openChat: "Chat with Shino, Yuya's AI companion",
+  closeChat: "Close chat",
+  chatLauncherHint: "Ask me about Yuya",
+  chatLauncherHintProject: "Ask me about this project",
+  companionName: "Shino",
+  chatCharacterRole: "Yuya's AI companion",
+  chatNoScript: "The chat needs JavaScript. You can still browse everything in the",
 };
 
 const ja: Record<keyof typeof en, string> = {
@@ -47,6 +56,15 @@ const ja: Record<keyof typeof en, string> = {
   fallbackNotice: "このページは英語のみです。",
   switchLabel: "このページを英語で読む",
   contactNav: "連絡先とプロフィール",
+  portfolio: "ポートフォリオ",
+  transcript: "会話の履歴",
+  openChat: "浅野のAIコンパニオン、しのと話す",
+  closeChat: "チャットを閉じる",
+  chatLauncherHint: "浅野について聞いてください",
+  chatLauncherHintProject: "このプロジェクトについて聞いてください",
+  companionName: "しの",
+  chatCharacterRole: "浅野のAIコンパニオン",
+  chatNoScript: "チャットにはJavaScriptが必要です。すべての内容は次のページでご覧いただけます：",
 };
 
 export const ui = { en, ja };
