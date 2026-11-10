@@ -53,6 +53,6 @@
     // Shino's live voice: the TTS server on the Oracle VM, behind Cloudflare Tunnel (README-voice.md).
     // Also set the secrets TTS_SERVER_TOKEN and TTS_SIGNING_KEY. Empty = no live voice; curated
     // answers still play their pre-recorded clips.
-    "TTS_URL": ""
+    "TTS_URL": "https://tts.yuyaasano.dev"
   }
 }
