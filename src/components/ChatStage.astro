@@ -28,6 +28,8 @@ const page = mode === "page";
     <!-- TODO: mount the VRM canvas here, sized to fill this element (the full viewport).
          Show a poster image until the model loads, then dispatch window "character:loaded".
          Listen for "chat:reply-start", "chat:tag", and "chat:reply-end" (see controller.ts).
+         For lip sync, "character:speech-start" carries { analyser }, an AnalyserNode on her
+         voice (voice.ts); read its level each frame until "character:speech-end".
          In the dialog, load the model on window "chat:open" (detail.slot is this element) and
          pause rendering on "chat:close". Frame the camera with the face in the upper half:
          the chat covers roughly the bottom 40% of the screen. -->
@@ -53,6 +55,15 @@ const page = mode === "page";
             <span class="chat-stage-label">{t("portfolio")}</span>
           </a>
         )}
+        <!-- Shino's voice on/off (voice.ts). Shown by Chat.astro's script, so it never appears without JavaScript. -->
+        <button type="button" class="chat-stage-pill chat-stage-voice" data-chat-voice-toggle aria-pressed="false" title={t("voiceTitle")} hidden>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"></path>
+            <path class="chat-stage-voice-on" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"></path>
+            <path class="chat-stage-voice-off" d="M16 9.5l5 5M21 9.5l-5 5"></path>
+          </svg>
+          <span class="chat-stage-label">{t("voice")}</span>
+        </button>
         <button type="button" class="chat-stage-pill" data-chat-transcript-toggle aria-controls={`chat-transcript-${lang}`} aria-expanded="false">
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14v10H9l-4 4z"></path></svg>
           <span class="chat-stage-label">{t("transcript")}</span>
@@ -168,6 +179,18 @@ const page = mode === "page";
   }
   .chat-stage-pill:hover {
     background: var(--hover);
+  }
+  .chat-stage-pill[hidden] {
+    display: none;
+  }
+  /* The speaker icon shows sound waves when voice is on, a cross when it's off. */
+  .chat-stage-voice[aria-pressed="true"] .chat-stage-voice-off,
+  .chat-stage-voice[aria-pressed="false"] .chat-stage-voice-on {
+    display: none;
+  }
+  .chat-stage-voice[aria-pressed="true"] {
+    border-color: var(--agent);
+    color: var(--agent);
   }
   .chat-stage .lang-switch {
     display: inline-flex;

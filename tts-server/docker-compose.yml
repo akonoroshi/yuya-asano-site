@@ -1,0 +1,39 @@
+# Shino's TTS server on the Oracle Cloud VM. Nothing listens on a public port: cloudflared
+# connects out to Cloudflare, which forwards https://tts.yuyaasano.dev to the gateway.
+# Setup and updates: README-voice.md.
+services:
+  voicevox:
+    # Pinned: the engine version is part of the Japanese voice fingerprint.
+    image: voicevox/voicevox_engine:cpu-0.25.2
+    restart: unless-stopped
+    expose: ["50021"]
+
+  gateway:
+    build: .
+    restart: unless-stopped
+    depends_on: [voicevox]
+    environment:
+      TTS_SERVER_TOKEN: ${TTS_SERVER_TOKEN:?set TTS_SERVER_TOKEN in .env}
+      VOICEVOX_URL: http://voicevox:50021
+      # A commit of huggingface.co/hexgrad/Kokoro-82M. Files are downloaded once into the
+      # models volume; pin a commit so a rebuild on a new VM gets the same model.
+      KOKORO_REVISION: ${KOKORO_REVISION:-main}
+      TORCH_THREADS: "2"
+    volumes:
+      # Read at startup: `docker compose restart gateway` after changing either file.
+      - ./voices.json:/config/voices.json:ro
+      - ./lexicon.json:/config/lexicon.json:ro
+      - models:/models
+    # Only reachable from the VM itself, for testing with curl.
+    ports: ["127.0.0.1:8080:8080"]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on: [gateway]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+
+volumes:
+  models:

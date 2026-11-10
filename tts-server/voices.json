@@ -1,0 +1,18 @@
+{
+  "_comment": "Shino's voice in each language. Anything here is part of the voice fingerprint: change it and every clip in that language is recorded again (npm run chat:voice). The Japanese credit is shown under the chat and must match the speaker.",
+  "en": {
+    "engine": "kokoro",
+    "voice": "af_heart",
+    "speed": 1.0
+  },
+  "ja": {
+    "engine": "voicevox",
+    "speaker": "春日部つむぎ",
+    "style": "ノーマル",
+    "speedScale": 1.0,
+    "pitchScale": 0.0,
+    "intonationScale": 1.0,
+    "volumeScale": 1.0,
+    "credit": "VOICEVOX:春日部つむぎ"
+  }
+}

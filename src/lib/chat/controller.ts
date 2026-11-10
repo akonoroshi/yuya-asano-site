@@ -14,6 +14,8 @@ import type { ApiErrorCode, ChatContext, ChatMessage, Lang, Link, RouteResult } 
 
 /** The character's current reply (shown as a caption, and kept in the transcript). */
 export interface ReplyView {
+  /** A placeholder shown until the reply's first text arrives ("Let me see…"); not saved. */
+  hint?(text: string): void;
   append(text: string): void;
   finish(extra?: { links?: Link[]; sources?: Link[] }): void;
   fail(message: string): void;
@@ -24,6 +26,8 @@ export interface Chip {
   onPick: () => void;
   /** "confirm" chips answer a "Did you mean …?" question. */
   kind: "suggest" | "confirm";
+  /** What a confirm chip means, so it can also be answered out loud ("yes", "no", "something else"). */
+  role?: "yes" | "as-said" | "else";
 }
 
 export interface ChatView {
@@ -31,6 +35,8 @@ export interface ChatView {
   startReply(): ReplyView;
   setChips(chips: Chip[]): void;
   setBusy(busy: boolean): void;
+  /** Removes the last question and its unanswered reply (see retractPending). */
+  retract?(): void;
 }
 
 /** Lists are alternative phrasings; one is picked each time, never the same twice in a row. */
@@ -43,11 +49,14 @@ export interface ChatStrings {
   yes: string;
   askAsSaid: string;
   errors: Record<ApiErrorCode | "interrupted", string>;
+  /** Said while waiting for the LLM in conversation mode ("Let me see…"). Optional. */
+  fillers?: string[];
 }
 
 export type AskOptions =
   | { source: "typed" }
-  | { source: "voice"; alternatives: string[] }
+  /** handsFree: asked in conversation mode, so a filler may cover the wait for the LLM. */
+  | { source: "voice"; alternatives: string[]; handsFree?: boolean }
   | { source: "chip"; faqId: string };
 
 const MAX_CHIPS = 4;
@@ -83,6 +92,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const HISTORY_SENT = 8; // messages sent to the Worker (it enforces its own cap too)
 const PHONEME_TIMEOUT_MS = 2500;
+// A filler on every LLM answer gets old fast: skip it some of the time.
+const FILLER_CHANCE = 0.75;
 
 const emit = (name: string, detail?: unknown) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
@@ -93,6 +104,9 @@ const emit = (name: string, detail?: unknown) => window.dispatchEvent(new Custom
  *   chat:tag          { kind: "act", name, at } | { kind: "emo", name, strength, at }
  *   chat:reply-end    { text, tagged }    the whole reply, plain and with its tags
  * So the character can either react to chat:tag as it arrives, or align the full tagged text itself.
+ * For the voice player (voice.ts), between start and end:
+ *   chat:say          { text, exp, sig }  LLM replies: the next sentence to speak, signed by the Worker
+ *   chat:reply-error  { text }            the error line shown in the caption, to speak too
  */
 const emitTag = (tag: Tag) => emit("chat:tag", tag);
 
@@ -114,6 +128,8 @@ export class ChatController {
   private workerReady: Promise<boolean> | null = null;
   private pending = new Map<number, (r: RouteResult) => void>();
   private nextId = 1;
+  /** The LLM request in flight, until its first text arrives (only then can it be retracted). */
+  private inflight: { abort: AbortController; question: string; retracted: boolean; filler: boolean } | null = null;
 
   /** page: "home", "work", "publications", or "project:<id>"; picks the starting chips. */
   constructor(lang: Lang, view: ChatView, strings: ChatStrings, page = "home") {
@@ -266,7 +282,20 @@ export class ChatController {
       this.setBusy(false);
       if (phonetic.kind === "faq") return this.confirmFaq(phonetic.id, text);
     }
-    return this.askLlm(text);
+    return this.askLlm(text, opts.source === "voice" && !!opts.handsFree);
+  }
+
+  /**
+   * Conversation mode guessed the end of a turn too early: the visitor kept talking. If the LLM
+   * hasn't started answering yet, cancel the request and take the question back, so it can be
+   * asked again with the rest of what they said. Returns the question, or null if too late.
+   */
+  retractPending(): string | null {
+    const f = this.inflight;
+    if (!f || f.retracted) return null;
+    f.retracted = true;
+    f.abort.abort();
+    return f.question;
   }
 
   private async phonemeRoute(text: string): Promise<RouteResult> {
@@ -439,18 +468,20 @@ export class ChatController {
     this.chipState = { kind: "only-else" };
     this.save();
     this.view.setChips([
-      { label: this.strings.yes, kind: "confirm", onPick: () => this.answerFaq(id, ans.canonical) },
-      { label: this.strings.askAsSaid, kind: "confirm", onPick: () => this.askLlm(userText) },
-      this.somethingElseChip(),
+      { label: this.strings.yes, kind: "confirm", role: "yes", onPick: () => this.answerFaq(id, ans.canonical) },
+      { label: this.strings.askAsSaid, kind: "confirm", role: "as-said", onPick: () => this.askLlm(userText) },
+      { ...this.somethingElseChip(), role: "else" },
     ]);
   }
 
-  private async askLlm(text: string) {
+  private async askLlm(text: string, handsFree = false) {
     if (this.busy) return;
     this.setBusy(true);
     this.view.setChips([]);
     this.history.push({ role: "user", content: text });
     const a = this.view.startReply();
+    const inflight = { abort: new AbortController(), question: text, retracted: false, filler: false };
+    this.inflight = inflight;
     const tags = new TagStream();
     let reply = "";
     let sources: Link[] = [];
@@ -459,6 +490,16 @@ export class ChatController {
     let errorText: string | undefined;
     let tagged = ""; // the raw reply with its tags, for chat:reply-end
     emit("chat:reply-start", {});
+    // Curated answers are instant, so only an LLM answer gets a filler. It's a placeholder in
+    // the caption (and a cue for the voice player), never part of the reply or the history;
+    // the system prompt tells the LLM not to open with one of its own.
+    const fillers = this.strings.fillers ?? [];
+    if (handsFree && fillers.length && Math.random() < FILLER_CHANCE) {
+      const line = this.vary("filler", fillers);
+      inflight.filler = true;
+      a.hint?.(line);
+      emit("chat:filler", { text: line });
+    }
     const write = (chunk: { text: string; tags: Tag[] }) => {
       // A tag is sent before the text it precedes, so the character reacts as the text appears.
       chunk.tags.forEach(emitTag);
@@ -468,7 +509,9 @@ export class ChatController {
       }
     };
     try {
-      for await (const ev of streamChat({ lang: this.lang, messages: this.history.slice(-HISTORY_SENT) })) {
+      for await (const ev of streamChat({ lang: this.lang, messages: this.history.slice(-HISTORY_SENT) }, inflight.abort.signal)) {
+        if (inflight.retracted) break;
+        if (ev.type === "delta" && this.inflight === inflight) this.inflight = null; // answering now: too late to retract
         if (ev.type === "meta") {
           sources = ev.sources ?? [];
           related = ev.related ?? [];
@@ -477,19 +520,27 @@ export class ChatController {
           tagged += ev.text;
           write(tags.push(ev.text));
         }
+        else if (ev.type === "say") emit("chat:say", { text: ev.text, exp: ev.exp, sig: ev.sig });
         else if (ev.type === "error") {
           failed = true;
           errorText = this.strings.errors[ev.code === "interrupted" ? "interrupted" : "unavailable"];
           a.fail(errorText);
+          emit("chat:reply-error", { text: errorText });
         }
       }
+      if (inflight.retracted) throw new Retracted();
       write(tags.flush());
       if (!failed) a.finish({ sources });
     } catch (e) {
+      if (inflight.retracted) return this.finishRetracted(inflight);
       failed = true;
       errorText = this.strings.errors[e instanceof ChatApiError ? e.code : "unavailable"];
       a.fail(errorText);
+      emit("chat:reply-error", { text: errorText });
     } finally {
+      if (this.inflight === inflight) this.inflight = null;
+    }
+    if (!inflight.retracted) {
       emit("chat:reply-end", { text: reply, tagged });
       if (reply.trim()) this.history.push({ role: "assistant", content: reply.trim() });
       else this.history.pop(); // drop the unanswered question so a retry doesn't send it twice
@@ -502,11 +553,26 @@ export class ChatController {
     }
   }
 
+  /** Undoes a retracted question: as if it had never been asked. */
+  private finishRetracted(f: { question: string; filler: boolean }) {
+    if (f.filler) emit("chat:filler-cancel");
+    emit("chat:reply-end", { text: "", tagged: "" }); // closes the chat:reply-start bracket
+    const last = this.history[this.history.length - 1];
+    if (last?.role === "user" && last.content === f.question) this.history.pop();
+    const logged = this.log[this.log.length - 1];
+    if (logged?.role === "user" && logged.text === f.question) this.log.pop();
+    this.view.retract?.();
+    this.setBusy(false);
+    this.save();
+  }
+
   private setBusy(b: boolean) {
     this.busy = b;
     this.view.setBusy(b);
   }
 }
+
+class Retracted extends Error {}
 
 function timeout<T>(ms: number, value: T): Promise<T> {
   return new Promise((r) => setTimeout(() => r(value), ms));

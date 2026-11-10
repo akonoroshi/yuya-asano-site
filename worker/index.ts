@@ -8,8 +8,12 @@
 //   4. off-topic gate: nothing on the site is similar -> canned reply, no LLM
 //   5. global daily LLM budget (Durable Object)
 //   6. Gemini, then Workers AI if Gemini fails before its first token (own, smaller budget)
+// Each reply is also cut into signed sentences ("say" events) for Shino's live voice.
+//
+// POST /api/tts: voices one signed sentence through the TTS server (see tts.ts).
 import { canned, pick, systemPrompt, type Passage } from "./prompt.ts";
 import { gemini, workersAi } from "./llm.ts";
+import { SayStream, tts } from "./tts.ts";
 import type { ChatEnv } from "./env.ts";
 import type { ApiErrorCode, ChatMessage, Lang, Link, ServerEvent } from "../src/lib/chat/types.ts";
 
@@ -27,6 +31,7 @@ export default {
     const url = new URL(req.url);
     if (url.pathname === "/api/chat") return chat(req, env, ctx, url);
     if (url.pathname === "/api/telemetry") return telemetry(req, env, url);
+    if (url.pathname === "/api/tts") return tts(req, env, ctx, url, originAllowed(req, env, url));
     return new Response("Not found", { status: 404 });
   },
 } satisfies ExportedHandler<ChatEnv>;
@@ -100,7 +105,11 @@ async function chat(req: Request, env: ChatEnv, ctx: ExecutionContext, url: URL)
   const threshold = Number(env.OFFTOPIC_THRESHOLD);
   if (topScore < threshold) {
     log({ event: "chat_offtopic", lang, question, topScore });
-    return sse([{ type: "meta", mode: "canned", reason: "offtopic" }, { type: "delta", text: pick(canned.offtopic[lang]) }, { type: "done" }]);
+    const reply = pick(canned.offtopic[lang]);
+    // Pre-recorded, so the browser normally plays the clip; the signed units are a fallback.
+    const say = new SayStream(env, lang);
+    const units = [...(await say.push(reply)), ...(await say.flush())];
+    return sse([{ type: "meta", mode: "canned", reason: "offtopic" }, { type: "delta", text: reply }, ...units, { type: "done" }]);
   }
 
   const budget = env.BUDGET.get(env.BUDGET.idFromName("global"));
@@ -134,28 +143,30 @@ async function chat(req: Request, env: ChatEnv, ctx: ExecutionContext, url: URL)
       let provider = "gemini";
       let answer = "";
       let failure: string | undefined;
+      const say = new SayStream(env, lang);
+      // Each chunk goes out as text first; a sentence's "say" event follows once it's complete.
+      const write = async (t: string) => {
+        answer += t;
+        await send({ type: "delta", text: t });
+        for (const ev of await say.push(t)) await send(ev);
+      };
       try {
         await send({ type: "meta", mode: "llm", sources, related });
         try {
-          for await (const t of gemini(env, system, messages)) {
-            answer += t;
-            await send({ type: "delta", text: t });
-          }
+          for await (const t of gemini(env, system, messages)) await write(t);
         } catch (e) {
           if (answer) throw e; // partway through: don't restart in a different voice
           failure = String(e);
           provider = "workers-ai";
           if (!(await budget.take("fallback", Number(env.DAILY_FALLBACK_LIMIT)))) throw new Error("fallback budget spent");
-          for await (const t of workersAi(env, system, messages)) {
-            answer += t;
-            await send({ type: "delta", text: t });
-          }
+          for await (const t of workersAi(env, system, messages)) await write(t);
         }
         if (!answer) throw new Error("empty answer");
       } catch (e) {
         failure = String(e);
         await send({ type: "error", code: answer ? "interrupted" : "unavailable" }).catch(() => {});
       } finally {
+        for (const ev of await say.flush().catch(() => [])) await send(ev).catch(() => {});
         await send({ type: "done" }).catch(() => {});
         await writer.close().catch(() => {});
         // Questions that reached the LLM: review these and move frequent ones into faq.ts.
@@ -179,10 +190,13 @@ async function telemetry(req: Request, env: ChatEnv, url: URL): Promise<Response
   if (!(await env.TELEMETRY_LIMIT.limit({ key })).success) return new Response(null, { status: 204 });
   const raw = (await req.text()).slice(0, 500);
   try {
-    const d = JSON.parse(raw) as { kind?: unknown; lang?: unknown; n?: unknown; local?: unknown };
+    const d = JSON.parse(raw) as { kind?: unknown; lang?: unknown; n?: unknown; local?: unknown; mode?: unknown };
     if (d.kind === "nbest") {
       const ua = req.headers.get("User-Agent") ?? "";
-      log({ event: "asr_nbest", lang: d.lang, n: Number(d.n), local: !!d.local, browser: browserName(ua) });
+      // mode: "tap" (one question per tap) or "conversation" (continuous recognition), which
+      // can return fewer alternatives in some browsers. Older clients sent no mode: tap.
+      const mode = d.mode === "conversation" ? "conversation" : "tap";
+      log({ event: "asr_nbest", lang: d.lang, n: Number(d.n), local: !!d.local, mode, browser: browserName(ua) });
     }
   } catch {
     /* ignore malformed telemetry */

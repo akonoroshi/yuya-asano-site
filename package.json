@@ -8,7 +8,7 @@
   "scripts": {
     "predev": "node scripts/chat/build-context.mjs",
     "dev": "astro dev",
-    "prebuild": "node scripts/chat/build-context.mjs",
+    "prebuild": "node scripts/chat/build-context.mjs && node scripts/chat/render-voice.mjs --check",
     "build": "astro build",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
@@ -19,13 +19,13 @@
     "chat:paraphrase": "node scripts/chat/paraphrase.mjs",
     "chat:index": "node scripts/chat/index-content.mjs",
     "chat:eval": "node scripts/chat/eval-router.mjs",
+    "chat:voice": "node scripts/chat/render-voice.mjs",
     "test:chat": "node --test \"tests/chat/*.test.ts\"",
     "cf-typegen": "wrangler types",
     "clean": "rm -rf dist .astro node_modules/.vite public/chat",
     "dev:fresh": "npm run clean && npm run dev"
   },
   "dependencies": {
-    "@astrojs/sitemap": "^3.7.4",
     "@fontsource-variable/hanken-grotesk": "^5.0.0",
     "astro": "^7.4.5",
     "cmu-pronouncing-dictionary": "^3.0.0",

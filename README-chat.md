@@ -38,12 +38,73 @@ warm openings and closings, facts stated plainly, no slang, at most one exclamat
 
 - Short conversational lines rotate between three phrasings, never the same one twice in a row:
   "Did you mean …?", the reply to "Something else", greetings, thanks, and the off-topic redirect.
-  They carry no facts. Edit them in `Chat.astro` (`didYouMean`, `somethingElseReply`), in
+  They carry no facts. Edit them in `src/data/chat/strings.ts` (`didYouMean`, `somethingElseReply`), in
   `faq.ts` (`alternatives` on the greeting and thanks entries), and in `worker/prompt.ts`
   (`canned.offtopic`).
 - Factual answers have one checked wording each, so a recruiter who asks twice gets the same
   facts. When a visitor asks one again in the same conversation, Shino adds a short lead-in
-  ("As I mentioned earlier:", `repeatLeadIn` in `Chat.astro`) and gives the same answer.
+  ("As I mentioned earlier:", `repeatLeadIn` in `src/data/chat/strings.ts`) and gives the same answer.
+
+## Voice
+
+The first time a visitor taps the microphone, the chips row is replaced by a small choice:
+
+- **Conversation** (`conversation.ts`): the microphone stays on, and the page decides when the
+  visitor has finished speaking, then sends the question. Shino nods during their pauses.
+- **Tap to ask** (`asr.ts`): one question per tap, shown in the input to check before sending.
+  This is how voice worked before.
+
+Nothing is asked of visitors who never tap the microphone. The choice is kept for the tab in
+`sessionStorage` (`chat:voice-mode`), like the conversation, and a link in the note under the
+input switches modes at any time. Switching to conversation starts listening right away.
+
+**When a turn ends.** Every 20 ms, `conversation.ts` reads the microphone level and the
+recognizer's words, and `turn.ts` decides:
+
+- Speech starts and stops by loudness over a noise floor that adapts to the room (`VadTracker`).
+- The silence that ends a turn depends on how the words end (`endOfTurnDelay`): 0.6 s if it
+  sounds finished ("what is his dissertation", 「教えてください」), 1.4 s mid-phrase ("…and the",
+  「…なんですけど」), 0.9 s otherwise, 2.5 s if no words have arrived yet.
+- Then it waits up to 0.5 s for the recognizer's final result, which has the alternatives the
+  fuzzy and phonetic matching use. Continuous recognition splits a turn into segments; the turn's
+  alternatives are the earlier segments' best guesses followed by each alternative of the last.
+- "Um" alone, or "mm-hmm" said while Shino was talking, is dropped instead of sent.
+
+**While Shino talks.** Speech longer than 0.5 s, or any word that isn't a backchannel, is an
+interruption (`voice:barge-in`), which also stops her voice; "mm-hmm" and 「うん」 aren't. A
+question asked while she's busy waits and is sent when she finishes; if there are several, the
+latest wins. With her voice off, "talking" means her reply is being written out; with it on, it
+means her audio is playing (`character:speech-start` / `character:speech-end`).
+
+**Her voice.** Shino speaks with Kokoro (English) and VOICEVOX (Japanese): curated lines from
+pre-recorded clips, LLM replies sentence by sentence from the TTS server. Off until the visitor
+taps **Voice** in the top bar; starting a voice conversation turns it on. Setup, recording the
+clips, and updates: [README-voice.md](README-voice.md).
+
+**When the guess was wrong.** If the visitor keeps talking after a turn was sent and the LLM
+hasn't started answering, the request is cancelled and the question taken back
+(`controller.retractPending()`), then sent again joined with the rest. Curated answers are
+instant, so a continuation after one of those is simply the next question. The cancelled request
+still reaches the Worker, so it counts toward the per-visitor rate limit.
+
+**Fillers.** When a spoken question goes to the LLM, Shino shows a short line in the caption
+("Let me see…", `fillers` in `src/data/chat/strings.ts`) until the answer starts, 3 times out of 4 and never
+the same line twice in a row. It isn't saved to the transcript or sent as history, and the system
+prompt (`worker/prompt.ts`) tells the LLM not to open with one of its own. With voice on, she
+says it from its pre-recorded clip while the answer is being prepared (`chat:filler { text }`,
+and `chat:filler-cancel` if the question is taken back).
+
+**"Did you mean …?" out loud.** In conversation mode the visitor can answer "yes", "no",
+"something else" (はい, 違います, ほかのこと, and similar; `parseConfirm` in `turn.ts`). Anything
+longer is a new question.
+
+**Privacy.** Listening stops when the visitor taps the mic, switches modes, closes the dialog,
+switches tabs, or leaves the page, and after 90 s without speech. It never restarts on its own.
+The note under the input says when it's listening.
+
+**Fallback.** If continuous recognition keeps ending right after it starts, or the language
+isn't supported, the mode switches to tap to ask and the note says so. If the microphone level
+isn't available, turns end on pauses in the recognizer's results instead (slower, and no nods).
 
 ## Where the chat appears
 
@@ -148,9 +209,13 @@ src/lib/chat/            shared logic; Node runs these .ts files directly in scr
   route.ts               the two free routing steps
   controller.ts          routing order, worker, streaming, history
   phoneme.worker.ts      loads CMUdict or kuromoji off the main thread
-  asr.ts                 Web Speech API: push to talk, n-best, biasing, on-device check
+  asr.ts                 Web Speech API setup; tap to ask, n-best, biasing, on-device check
+  conversation.ts        conversation mode: continuous recognition, microphone level, turns
+  turn.ts                turn-taking rules and thresholds (TURN_CONFIG), pure, unit-tested
   api.ts                 /api/chat client
   tags.ts                behavior tags ([act:…], [emo:…]): vocabulary, parser, streaming parser
+  speech.ts              how replies are cut into spoken sentences (browser, Worker, recording script)
+  voice.ts               Shino's voice player (README-voice.md)
   mock.ts                stand-in for /api/chat in `npm run dev` (?mock); never in production
 src/components/Chat.astro          the chat panel (caption, chips, input, transcript)
 src/components/ChatStage.astro     full-screen layout: character slot, top bar, chat
@@ -158,14 +223,18 @@ src/components/ChatLauncher.astro  corner character + full-screen dialog (every 
 src/views/ChatView.astro           the home page (/ and /ja/)
 src/data/chat/
   faq.ts                 curated answers (EN/JA), based on site.ts and the project pages
+  strings.ts             the chat's text and Shino's conversational lines (also recorded as clips)
+  pronunciations.ts      pronunciation fixes for her voice
   terms.ts               domain terms: ASR biasing, pronunciations, Japanese readings
   factsheet.ts           always in the LLM prompt; built from site.ts, so edit site.ts instead
   paraphrases.json       generated phrasings (npm run chat:paraphrase), reviewed by you
   papers/                paper texts for retrieval (see "Retrieval index")
   eval/en.tsv, ja.tsv    routing test sets
   generated/             vector-ids.json, written by chat:index (commit it)
-scripts/chat/            build, paraphrase, index, eval, g2pE helper
-worker/                  /api/chat and /api/telemetry
+scripts/chat/            build, paraphrase, index, eval, g2pE helper, render-voice (clips)
+worker/                  /api/chat, /api/telemetry, and /api/tts
+tts-server/              the TTS server for the Oracle VM (README-voice.md)
+public/voice/            pre-recorded clips (committed)
 tests/chat/              unit tests
 ```
 
@@ -217,6 +286,11 @@ git add src/data/chat/generated/vector-ids.json
 
 Rerun after changing project pages, papers, or FAQ answers. Only changed chunks are embedded.
 
+### 4. Shino's voice
+
+The Oracle VM, the tunnel, two more Worker secrets, and recording the clips: see
+[README-voice.md](README-voice.md). Without it, the chat works as before, silently.
+
 ## Running locally
 
 ### Without any backend (no Vectorize, Workers AI, or Gemini)
@@ -248,6 +322,9 @@ questions, which come from a stand-in for `/api/chat` (`src/lib/chat/mock.ts`, d
 | `?mock=limit` | the daily limit is reached |
 | `?mock=rate` | the visitor is rate limited |
 | `?mock=off` | back to the real `/api/chat` (in `npm run dev`, that shows "couldn't answer") |
+
+**Voice in dev:** curated answers play their recorded clips (from `public/voice/`). Mock
+answers have no voice: they aren't signed and their text has no clip.
 
 The mock is never part of a production build: `api.ts` loads it only when Vite's
 `import.meta.env.DEV` is true.
@@ -293,6 +370,31 @@ tags only (the system prompt lists them); unknown tags from the model are droppe
 | `chat:open` | `{ slot }` | the corner dialog opened; load the model into `slot` |
 | `chat:close` | | the dialog closed; pause rendering |
 | `character:loaded` | (from the character) | start loading the voice dictionaries |
+| `chat:filler` | `{ text }` | play this filler line (conversation mode, LLM answers only) |
+| `chat:filler-cancel` | | stop the filler: the question was taken back |
+| `chat:say` | `{ text, exp, sig }` | LLM replies: the next sentence to speak, signed by the Worker |
+| `chat:reply-error` | `{ text }` | the error line shown in the caption, also spoken |
+
+From `conversation.ts`, in conversation mode:
+
+| Event | Detail | When |
+| --- | --- | --- |
+| `voice:listening` | `{ on, reason? }` | the microphone turned on or off |
+| `voice:speech-start` | | the visitor started speaking |
+| `voice:backchannel` | | a good moment to nod (a short way into a pause, with a cooldown) |
+| `voice:barge-in` | | the visitor is talking over Shino: stop her voice |
+| `voice:turn-end` | `{ alternatives }` | the visitor finished a turn |
+
+And from the voice player (`voice.ts`):
+
+| Event | Detail | When |
+| --- | --- | --- |
+| `character:speech-start` | `{ analyser }` | Shino's voice starts playing; read the `AnalyserNode` each frame for lip sync |
+| `character:speech-end` | | it ends, or was stopped (`voice:barge-in`, a new reply, closing the chat) |
+| `character:voice-state` | `{ enabled }` | the Voice setting changed |
+
+`voice:backchannel` has no matching act tag on purpose: it's a head nod while the visitor talks,
+not part of a reply. A gentle nod works better than `act:ack`, which is sized for her own lines.
 
 Your alignment code can use either form: react to `chat:tag` as the text streams in, or take the
 full tagged text from `chat:reply-start` (curated replies) or `chat:reply-end` (any reply). When a
@@ -319,6 +421,20 @@ The starter English set already shows the paper's "more specific query" false po
 0.85 coverage. The confirmation chip catches it, but it's the case to tune against. For Japanese,
 `vowelWeight: 0.5` is a first guess; try consonant-only coverage if chance vowel matches dominate.
 
+**Turn-taking** thresholds are in `TURN_CONFIG` (`src/lib/chat/turn.ts`). The likely ones to
+change after phone testing:
+
+- Turns cut off mid-thought: raise `endOfTurn.defaultMs` or `continuingMs`, or add the word they
+  ended on to `EN_CONTINUING` / `JA_CONTINUING`.
+- Answers feel slow after clear questions: lower `endOfTurn.completeMs`.
+- Background noise counts as speech: raise `vad.onsetDb`.
+- Shino stops for coughs or laughs: raise `bargeIn.minSpeechMs`. With a voice player, also check
+  whether her own voice leaks into the microphone on laptop speakers; headphones avoid it.
+- Too much or too little nodding: `nod.cooldownMs` per language.
+
+`asr_nbest` telemetry now has `mode` (`tap` or `conversation`): compare `n` between them per
+browser, since continuous recognition may return fewer alternatives.
+
 **Off-topic threshold** (`OFFTOPIC_THRESHOLD` in `wrangler.jsonc`): read `topScore` in the logs.
 Too many good questions in `chat_offtopic` events: lower it. Junk reaching `chat_llm`: raise it.
 
@@ -334,7 +450,8 @@ In the Cloudflare dashboard, open the Worker's logs and filter by `event`:
   then `npm run chat:paraphrase` and review the new phrasings in `paraphrases.json`.
   Check answers for anything wrong about you.
 - `chat_offtopic`: questions the gate rejected, for tuning the threshold.
-- `asr_nbest`: how many alternatives each browser returns (`n`), and whether it was on-device.
+- `asr_nbest`: how many alternatives each browser returns (`n`), whether it was on-device, and
+  the voice `mode`.
 - `chat_budget`, `chat_error`: daily limits hit, retrieval failures.
 
 ## Limits (all in wrangler.jsonc)
@@ -344,12 +461,26 @@ In the Cloudflare dashboard, open the Worker's logs and filter by `event`:
   (`DAILY_FALLBACK_LIMIT`, kept small because the fallback shares the free daily neurons with
   embeddings).
 - Per request: a 500-character question; the last 8 messages are sent.
+- Voice: 40 `/api/tts` requests per minute per visitor (`TTS_LIMIT`), one per sentence of an LLM reply.
 
 ## What was tested, and what wasn't
 
-Tested in my sandbox: the 17 unit tests (`npm run test:chat`), strict type-checking of the browser
-and Worker code, and the bundled Worker run against mocked bindings (origin check, size and shape
-checks, Gemini streaming, fallback after a Gemini error, daily limit, off-topic reply).
+Tested in my sandbox: the unit tests (`npm run test:chat`, now including `turn.test.ts`), strict
+type-checking of the browser and Worker code, and the bundled Worker run against mocked bindings
+(origin check, size and shape checks, Gemini streaming, fallback after a Gemini error, daily
+limit, off-topic reply). Conversation mode was run against a simulated microphone, recognizer,
+and clock (turn ends, mid-phrase pauses, nods, backchannels vs. interruptions, recognizer
+restarts, the idle stop) and the controller against a simulated Worker (filler, taking a question
+back, the merged question, history).
+
+Not tested for conversation mode: real microphones and recognizers. Check on real devices:
+
+- Chrome and Edge on desktop and Android, Safari on iOS and macOS: does conversation mode stay
+  on, or fall back to tap to ask? iOS Safari's continuous recognition is the most likely to fail.
+- Whether the browser accepts the microphone track in `recognition.start(track)`. If not, it
+  ignores it and opens its own capture alongside the level meter; on some phones two captures at
+  once may fail, which shows up as the fallback.
+- The thresholds above, in a quiet room and a noisy one, in both languages.
 
 Not tested: I couldn't install npm packages, so the build and eval scripts ran against stand-ins
 for CMUdict and kuromoji, and nothing ran against real Cloudflare or Gemini APIs. Things to check

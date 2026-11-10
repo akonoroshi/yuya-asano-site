@@ -1,0 +1,11 @@
+# Kokoro and misaki are pinned exactly: they decide how the English voice sounds. Everything
+# that affects the sound is also in the voice fingerprint (app.py), so an upgrade can't quietly
+# mix old and new audio: after one, run `npm run chat:voice` to record the clips again.
+kokoro==0.9.4
+misaki[en]==0.9.4
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+httpx>=0.27,<1
+soundfile>=0.12,<1
+numpy>=1.26,<3
+huggingface_hub>=0.24,<2

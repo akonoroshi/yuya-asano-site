@@ -24,7 +24,9 @@
   "ratelimits": [
     { "name": "CHAT_BURST", "namespace_id": "1001", "simple": { "limit": 3, "period": 10 } },
     { "name": "CHAT_SUSTAINED", "namespace_id": "1002", "simple": { "limit": 12, "period": 60 } },
-    { "name": "TELEMETRY_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } }
+    { "name": "TELEMETRY_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
+    // Shino's live voice: one request per sentence of an LLM reply (curated answers are static files).
+    { "name": "TTS_LIMIT", "namespace_id": "1004", "simple": { "limit": 40, "period": 60 } }
   ],
 
   // Global daily caps on LLM calls (see worker/budget.ts).
@@ -47,6 +49,10 @@
     // Optional: route LLM calls through Cloudflare AI Gateway (logs, dashboard rate limits).
     "AI_GATEWAY_ID": "",
     "CF_ACCOUNT_ID": "",
-    "ALLOWED_ORIGINS": ""
+    "ALLOWED_ORIGINS": "",
+    // Shino's live voice: the TTS server on the Oracle VM, behind Cloudflare Tunnel (README-voice.md).
+    // Also set the secrets TTS_SERVER_TOKEN and TTS_SIGNING_KEY. Empty = no live voice; curated
+    // answers still play their pre-recorded clips.
+    "TTS_URL": ""
   }
 }

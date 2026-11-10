@@ -53,6 +53,8 @@ export type RouteResult =
 export type ServerEvent =
   | { type: "meta"; mode: "llm" | "canned"; reason?: "offtopic"; sources?: Link[]; related?: string[] }
   | { type: "delta"; text: string }
+  /** One unit of the reply to speak (speech.ts), signed so /api/tts only voices the site's own replies. */
+  | { type: "say"; text: string; exp: number; sig: string }
   | { type: "error"; code: "interrupted" | "unavailable" }
   | { type: "done" };
 

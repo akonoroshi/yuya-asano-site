@@ -1,5 +1,7 @@
-// Speech input through the browser's Web Speech API. Push to talk: start() begins listening,
-// stop() ends it early; recognition also ends by itself when the visitor stops speaking.
+// Speech input through the browser's Web Speech API. Two modes share the setup here:
+//   Listener (this file)                    tap to ask: start() listens for one question, stop()
+//                                           ends it early; it also ends when the visitor stops
+//   ConversationListener (conversation.ts)  always on, with its own end-of-turn detection
 //
 // maxAlternatives is only a maximum. The spec lets a browser return fewer, so callers read
 // however many alternatives come back. Counts are reported to /api/telemetry so you can see
@@ -11,20 +13,22 @@ interface Alternative { transcript: string; confidence: number }
 interface Result { readonly length: number; readonly isFinal: boolean; [i: number]: Alternative }
 interface RecognitionEvent extends Event { readonly resultIndex: number; readonly results: { readonly length: number; [i: number]: Result } }
 interface RecognitionErrorEvent extends Event { readonly error: string }
-interface Recognition extends EventTarget {
+export interface Recognition extends EventTarget {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   maxAlternatives: number;
   processLocally?: boolean;
   phrases?: unknown;
-  start(): void;
+  /** Newer browsers accept the microphone track to recognize, so the page and the recognizer share one capture. */
+  start(track?: MediaStreamTrack): void;
   stop(): void;
   abort(): void;
   onresult: ((e: RecognitionEvent) => void) | null;
   onerror: ((e: RecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
 }
+export type { RecognitionEvent, RecognitionErrorEvent };
 interface RecognitionCtor {
   new (): Recognition;
   available?: (o: { langs: string[]; processLocally?: boolean }) => Promise<string>;
@@ -46,6 +50,33 @@ export interface ListenResult {
 export type ListenError = "no-speech" | "not-allowed" | "unavailable";
 
 let phrasesUnsupported = false;
+export const markPhrasesUnsupported = () => {
+  phrasesUnsupported = true;
+};
+
+/**
+ * A recognizer set up the same way for both modes: up to 5 alternatives, on-device when the
+ * browser can, and biased toward the site's terms when the browser supports phrase lists.
+ */
+export function createRecognition(lang: Lang, opts: { local: boolean; phrases: string[]; continuous: boolean }): Recognition {
+  const rec = new Ctor!();
+  rec.lang = langTag(lang);
+  rec.continuous = opts.continuous;
+  rec.interimResults = true;
+  rec.maxAlternatives = 5; // Alexa gave up to 5 in the TaskBot data
+  if (opts.local && "processLocally" in rec) rec.processLocally = true;
+  if (!phrasesUnsupported && opts.phrases.length && Phrase && "phrases" in rec) {
+    try {
+      rec.phrases = opts.phrases.map((p) => new Phrase(p, 3));
+    } catch {
+      phrasesUnsupported = true;
+    }
+  }
+  return rec;
+}
+
+/** Whether phrase biasing will be attempted (false after the browser rejected it once). */
+export const phrasesEnabled = () => !phrasesUnsupported;
 const localCache = new Map<Lang, Promise<boolean>>();
 
 /** Whether this browser can recognize the language on the device, without a download. */
@@ -95,20 +126,8 @@ export class Listener {
 
   private run(local: boolean, usePhrases: boolean): Promise<ListenResult> {
     return new Promise((resolve, reject) => {
-      const rec = new Ctor!();
+      const rec = createRecognition(this.lang, { local, phrases: usePhrases ? this.phrases : [], continuous: false });
       this.rec = rec;
-      rec.lang = langTag(this.lang);
-      rec.continuous = false;
-      rec.interimResults = true;
-      rec.maxAlternatives = 5; // Alexa gave up to 5 in the TaskBot data
-      if (local && "processLocally" in rec) rec.processLocally = true;
-      if (usePhrases && Phrase && "phrases" in rec) {
-        try {
-          rec.phrases = this.phrases.map((p) => new Phrase(p, 3));
-        } catch {
-          phrasesUnsupported = true;
-        }
-      }
       let final: string[] = [];
       let failed: string | null = null;
       rec.onresult = (e) => {
@@ -129,7 +148,7 @@ export class Listener {
         if (failed === "not-allowed" || failed === "service-not-allowed") return reject("not-allowed" satisfies ListenError);
         const alternatives = [...new Set(final.filter(Boolean))];
         if (!alternatives.length) return reject((failed && failed !== "no-speech" && failed !== "aborted" ? "unavailable" : "no-speech") satisfies ListenError);
-        report(this.lang, final.length, local);
+        report(this.lang, final.length, local, "tap");
         resolve({ alternatives, local });
       };
       rec.start();
@@ -137,9 +156,10 @@ export class Listener {
   }
 }
 
-function report(lang: Lang, n: number, local: boolean) {
+/** How many alternatives the browser returned, per mode, so you can see what each browser does. */
+export function report(lang: Lang, n: number, local: boolean, mode: "tap" | "conversation") {
   try {
-    navigator.sendBeacon("/api/telemetry", JSON.stringify({ kind: "nbest", lang, n, local }));
+    navigator.sendBeacon("/api/telemetry", JSON.stringify({ kind: "nbest", lang, n, local, mode }));
   } catch {
     /* telemetry is best effort */
   }
