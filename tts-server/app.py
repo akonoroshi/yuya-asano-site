@@ -117,7 +117,7 @@ class Kokoro(Engine):
         self.speed = float(cfg.get("speed", 1.0))
         self.fingerprint = fingerprint({
             "engine": "kokoro",
-            "versions": {p: version(p) for p in ("kokoro", "misaki", "torch", "spacy", "en_core_web_sm")},
+            "versions": {p: version(p) for p in ("kokoro", "misaki", "torch", "transformers", "spacy", "en_core_web_sm")},
             "files": {f.name: sha256_file(f) for f in files},
             "config": cfg,
             "lexicon": lexicon,
