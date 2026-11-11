@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@fontsource-variable/hanken-grotesk": "^5.0.0",
-    "@tonari/characters": "github:akonoroshi/vrm-characters#9d63634f1ee0643d79e38ba5ead7048c61842729",
+    "@tonari/characters": "github:akonoroshi/vrm-characters#f57247a92d29e84069ab30a988041f8d0fcecdd8",
     "astro": "^7.4.5",
     "cmu-pronouncing-dictionary": "^3.0.0",
     "kuromoji": "^0.1.2",
