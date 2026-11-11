@@ -24,15 +24,9 @@ const page = mode === "page";
 ---
 
 <div class:list={["chat-stage", `chat-stage--${mode}`]} data-chat-stage>
-  <div class="chat-stage-character" data-character-slot aria-hidden="true">
-    <!-- TODO: mount the VRM canvas here, sized to fill this element (the full viewport).
-         Show a poster image until the model loads, then dispatch window "character:loaded".
-         Listen for "chat:reply-start", "chat:tag", and "chat:reply-end" (see controller.ts).
-         For lip sync, "character:speech-start" carries { analyser }, an AnalyserNode on her
-         voice (voice.ts); read its level each frame until "character:speech-end".
-         In the dialog, load the model on window "chat:open" (detail.slot is this element) and
-         pause rendering on "chat:close". Frame the camera with the face in the upper half:
-         the chat covers roughly the bottom 40% of the screen. -->
+  <div class="chat-stage-character" data-character-slot data-mode={mode} aria-hidden="true">
+    <img class="chat-character-poster" src="/characters/avatars/shino.png" alt="" loading={page ? "eager" : "lazy"} />
+    <div data-character-mount></div>
   </div>
 
   <div class="chat-stage-ui">
@@ -89,6 +83,36 @@ const page = mode === "page";
   </div>
 </div>
 
+<script>
+  import { characterEvents } from "../lib/chat/character-events";
+
+  document.querySelectorAll<HTMLElement>("[data-character-slot]").forEach((slot) => {
+    const load = async () => {
+      const pending: Event[] = [];
+      const capture = (event: Event) => pending.push(event);
+      for (const name of characterEvents) window.addEventListener(name, capture);
+      try {
+        const { mountCharacter } = await import("./CharacterMount");
+        mountCharacter(slot, pending);
+      } catch (error) {
+        console.warn("Unable to start the character renderer", error);
+      } finally {
+        for (const name of characterEvents) window.removeEventListener(name, capture);
+      }
+    };
+    if (slot.dataset.mode === "page" || slot.closest("dialog")?.open) {
+      void load();
+    } else {
+      const onOpen = (event: Event) => {
+        if ((event as CustomEvent<{ slot?: HTMLElement }>).detail?.slot !== slot) return;
+        window.removeEventListener("chat:open", onOpen);
+        void load();
+      };
+      window.addEventListener("chat:open", onOpen);
+    }
+  });
+</script>
+
 <style is:global>
   /* Global so the same rules apply inside the dialog's top layer; every selector starts with
      .chat-stage. Surfaces over the character are opaque so text stays readable. */
@@ -100,6 +124,28 @@ const page = mode === "page";
   .chat-stage-character {
     position: absolute;
     inset: 0;
+  }
+  .chat-stage-character::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: clamp(4rem, 14vh, 8rem);
+    background: linear-gradient(transparent, var(--paper) 65%);
+    pointer-events: none;
+  }
+  .chat-character-renderer,
+  .chat-character-poster {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .chat-character-poster {
+    object-fit: contain;
+    object-position: center;
+  }
+  .chat-stage-character[data-character-loaded] .chat-character-poster {
+    display: none;
   }
   .chat-stage-character canvas {
     display: block;

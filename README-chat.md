@@ -401,8 +401,10 @@ full tagged text from `chat:reply-start` (curated replies) or `chat:reply-end` (
 new conversation opens, `chat:tag` sends `emo:happy` (0.8) and `act:greet`, since the opening
 line is already on screen.
 
-Mount the character in `[data-character-slot]` in `ChatStage.astro`: on the home page right away,
-in the dialog on `chat:open`. It fills the whole viewport; the top bar and the chat float over it.
+`ChatStage.astro` loads `CharacterMount.ts` on the home page and on the dialog's first `chat:open`.
+It mounts Shino from `@tonari/characters`, sends gesture tags to the shared motion controller,
+and passes the playing voice's analyser level to the renderer for lip sync. Emotion tags select
+the shared idle cue where available. The mount fills the viewport, with the top bar and chat floating over it.
 The caption, chips, and input cover roughly the bottom 40% of the screen, so frame the camera with
 the face in the upper half. Clicks on empty areas of the overlay pass through to the canvas, in
 case you add interaction with the character.

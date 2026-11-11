@@ -46,10 +46,14 @@ No Homebrew? Install Node 26 LTS with the macOS installer from nodejs.org instea
 
 ### 2. Install and run
 
+Your GitHub SSH key needs read access to `akonoroshi/vrm-characters` to install the pinned `@tonari/characters` dependency.
+
 ```bash
-npm install         # creates or updates package-lock.json; commit it
+npm ci              # installs from package-lock.json
 npm run dev         # http://localhost:4321
 ```
+
+Dev and production builds copy Shino's assets from the installed package into `public/characters/`. To update her model, textures, animations, or renderer, update the shared repository and run `npm install 'github:akonoroshi/vrm-characters#COMMIT_SHA'` with the new commit, then commit the manifest and lockfile.
 
 ### Other commands
 
@@ -119,7 +123,7 @@ Note: GitHub pauses scheduled workflows in public repositories after 60 days wit
 
 ## Keeping dependencies patched
 
-- **Automatic:** Dependabot (`.github/dependabot.yml`) opens a weekly PR that groups all minor and patch updates. CI (`.github/workflows/ci.yml`) builds every PR. If it's green, merge it, and Cloudflare deploys automatically.
+- **Automatic:** Dependabot (`.github/dependabot.yml`) opens a weekly PR that groups all minor and patch updates. Run `npm ci && npm run build && npm run test:chat` on the proposed changes before merging. Cloudflare deploys automatically after merge.
 - **Security fixes:** In GitHub repo settings, turn on *Dependabot alerts* and *Dependabot security updates* so urgent fixes arrive immediately instead of waiting for the weekly run.
 - **Major Astro versions:** These arrive as separate PRs. Before merging, read the upgrade guide at docs.astro.build, or run `npm run upgrade:astro`, which upgrades Astro and official integrations together.
 - **Node.js:** Change the number in `.nvmrc`, then run `fnm install` locally. CI reads the same file.
@@ -130,10 +134,13 @@ Note: GitHub pauses scheduled workflows in public repositories after 60 days wit
 
 1. Push this repo to GitHub.
 2. In the Cloudflare dashboard: Workers & Pages → Create application → Import a repository.
-3. Build command: `npm run build`. Deploy command: `npx wrangler deploy`.
-4. Add your custom domain under the Worker's Settings → Domains & Routes.
+3. In Workers Builds, set `SKIP_DEPENDENCY_INSTALL` to `1` and add the encrypted build secret `VRM_CHARACTERS_DEPLOY_KEY` for production and previews. Its value is the base64-encoded private half of a read-only SSH deploy key for `akonoroshi/vrm-characters`.
+4. Set the build command for production and previews to `sh scripts/install-ci-dependencies.sh && npm run build`. Keep `npx wrangler deploy` as the production deploy command. When configuring an existing Worker before merging this change, use `if [ -f scripts/install-ci-dependencies.sh ]; then sh scripts/install-ci-dependencies.sh; else npm ci; fi && npm run build` so builds of the current production branch can still install their dependencies.
+5. Add your custom domain under the Worker's Settings → Domains & Routes.
 
 Every push to `main` then deploys automatically, and branches get preview URLs.
+
+GitHub CI uses an Actions secret with the same name and its own read-only deploy key. Fork and Dependabot PRs skip the build job because it requires access to that Actions secret.
 
 ## Structure
 
