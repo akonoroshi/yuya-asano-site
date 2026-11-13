@@ -36,6 +36,7 @@ const projects = defineCollection({
     // line in the Markdown (English and Japanese) where each should appear.
     replays: z.record(z.string(), replay).optional(),
     demo: z.enum(["asr-correction"]).optional(),
+    youtube: z.object({ id: z.string().regex(/^[\w-]{11}$/), title: z.string() }).optional(),
     heroMedia: z.string().optional(), // placeholder text for a figure or video slot above the article
     draft: z.boolean().default(false), // true hides the project everywhere
   }),

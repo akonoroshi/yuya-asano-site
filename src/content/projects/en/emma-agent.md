@@ -11,6 +11,9 @@ facts:
   - { label: "Built with", value: "Python, Azure OpenAI, vLLM, ASP.NET, Azure SQL" }
 links:
   - { label: "The studies that motivated it", href: "/projects/emma-pairs/" }
+youtube:
+  id: PXPNeGwKwrs
+  title: Emma demo
 replay:
   title: "One student teaches Emma"
   foot: "Illustrative conversation. Problem: 3 cups of flour make 2 cakes. How much flour for 5 cakes?"
