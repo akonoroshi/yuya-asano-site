@@ -14,6 +14,16 @@
 //   character:speech-start  { analyser }  her voice starts; read the AnalyserNode for lip sync
 //   character:speech-end                  it ended, or was stopped (barge-in, a new reply, closing)
 //   character:voice-state   { enabled }   the Voice setting changed
+//   voice:unit              { text, ms }  a unit's audio starts and lasts ms; ms is 0 and
+//                                         skipped true when it has no audio (the caption pacer)
+//   voice:stopped                         stopped before the end (barge-in, Voice off, closing)
+//   voice:backchannel-played { text, ms } a spoken backchannel started (conversation.ts keeps its
+//                                         words out of the visitor's transcript)
+//
+// Events in, besides the controller's: voice:backchannel (conversation.ts, at a low-pitch cue)
+// says one of `backchannels` (strings.ts) softly, only if nothing else is playing or queued.
+// It's not a turn: no speech-start/end, no voice:unit, no caption.
+import { chatStrings } from "../../data/chat/strings.ts";
 import { speechKey, speechUnits } from "./speech.ts";
 import type { Lang } from "./types.ts";
 
@@ -21,6 +31,7 @@ const STORAGE_KEY = "chat:voice"; // "on" | "off", per tab
 const GAP_MS = 120; // between units, so sentences don't run together
 const MAX_LIVE_FAILURES = 2; // then stop asking the server for the rest of the page view
 const CLIP_CACHE = 64;
+const BACKCHANNEL_VOLUME = 0.6; // softer than her replies: she's listening, not taking the turn
 
 interface VoiceManifest {
   fingerprint: string;
@@ -28,6 +39,7 @@ interface VoiceManifest {
 }
 
 interface Segment {
+  text: string;
   buffer: Promise<AudioBuffer | null>;
 }
 
@@ -52,6 +64,8 @@ export class VoicePlayer {
   private liveFailures = 0;
   private liveOff = false;
   private spoke = false; // anything said on this page yet
+  private backchannelSource: AudioBufferSourceNode | null = null;
+  private lastBackchannel = -1;
 
   constructor(lang: Lang) {
     this.lang = lang;
@@ -81,6 +95,7 @@ export class VoicePlayer {
     on("chat:reply-end", () => this.close());
     on("chat:filler-cancel", () => this.stop());
     on("voice:barge-in", () => this.stop());
+    on("voice:backchannel", () => void this.backchannel());
     on("chat:close", () => this.stop());
     document.addEventListener("visibilitychange", () => document.hidden && this.stop());
     window.addEventListener("pagehide", () => this.stop());
@@ -153,9 +168,9 @@ export class VoicePlayer {
 
   /* ---------- Building the queue ---------- */
 
-  /** A new reply: whatever was playing stops. */
+  /** A new reply: whatever was playing stops (quietly: this isn't the visitor stopping her). */
   private begin() {
-    this.stop();
+    this.halt();
     this.open = true;
     this.spoke = true;
   }
@@ -172,8 +187,8 @@ export class VoicePlayer {
     wake?.();
   }
 
-  private push(buffer: Promise<AudioBuffer | null>) {
-    this.queue.push({ buffer });
+  private push(text: string, buffer: Promise<AudioBuffer | null>) {
+    this.queue.push({ text, buffer });
     this.notify();
     if (!this.playing) {
       this.playing = true;
@@ -182,12 +197,13 @@ export class VoicePlayer {
   }
 
   private addText(text: string) {
-    for (const unit of speechUnits(this.lang, text)) this.push(this.clip(unit));
+    for (const unit of speechUnits(this.lang, text)) this.push(unit, this.clip(unit));
   }
 
   private addLive(unit: string, exp: number, sig: string) {
     const gen = this.gen;
     this.push(
+      unit,
       this.clip(unit).then((clip) => {
         if (clip || this.liveOff || gen !== this.gen) return clip;
         return this.live(unit, exp, sig);
@@ -252,8 +268,11 @@ export class VoicePlayer {
       }
       const buffer = await seg.buffer;
       if (gen !== this.gen) return;
-      if (!buffer) continue;
-      if (!(await this.play(buffer, gen))) return;
+      if (!buffer) {
+        emit("voice:unit", { text: seg.text, ms: 0, skipped: true });
+        continue;
+      }
+      if (!(await this.play(seg.text, buffer, gen))) return;
       if (gen === this.gen && (this.queue.length || this.open)) await sleep(GAP_MS);
     }
     if (gen === this.gen) {
@@ -263,7 +282,7 @@ export class VoicePlayer {
   }
 
   /** Plays one buffer to the end. Returns false if audio isn't allowed yet (no gesture). */
-  private async play(buffer: AudioBuffer, gen: number): Promise<boolean> {
+  private async play(text: string, buffer: AudioBuffer, gen: number): Promise<boolean> {
     const ctx = this.context();
     if (ctx.state !== "running") await ctx.resume().catch(() => {});
     if (ctx.state !== "running" || gen !== this.gen) {
@@ -281,14 +300,66 @@ export class VoicePlayer {
     await new Promise<void>((resolve) => {
       src.onended = () => resolve();
       src.start();
+      emit("voice:unit", { text, ms: buffer.duration * 1000 });
     });
     if (this.source === src) this.source = null;
     return true;
   }
 
-  /** Stops speaking and drops everything queued. */
+  /**
+   * A soft "mm-hmm" while the visitor talks. Only with Voice on, only from a recorded clip (a live
+   * one would arrive too late), and only when nothing else is playing, queued, or still to come.
+   */
+  private async backchannel() {
+    if (!this.on || this.playing || this.open || this.queue.length || this.backchannelSource) return;
+    const lines = chatStrings[this.lang].backchannels;
+    if (!lines.length) return;
+    // Never the same line twice in a row.
+    let i = Math.floor(Math.random() * lines.length);
+    if (lines.length > 1 && i === this.lastBackchannel) i = (i + 1) % lines.length;
+    const line = lines[i];
+    const unit = speechUnits(this.lang, line)[0];
+    const gen = this.gen;
+    const buffer = unit ? await this.clip(unit) : null;
+    const ctx = this.audio;
+    // Still quiet? A reply may have started while the clip loaded. And never resume the audio
+    // context here: this isn't a click, and a backchannel isn't worth asking for one.
+    if (!buffer || !ctx || ctx.state !== "running" || gen !== this.gen || this.playing || this.open || this.backchannelSource) return;
+    this.lastBackchannel = i;
+    const gain = ctx.createGain();
+    gain.gain.value = BACKCHANNEL_VOLUME;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(gain);
+    gain.connect(ctx.destination); // not through the lip-sync analyser
+    this.backchannelSource = src;
+    src.onended = () => {
+      if (this.backchannelSource === src) this.backchannelSource = null;
+    };
+    src.start();
+    emit("voice:backchannel-played", { text: line, ms: buffer.duration * 1000 });
+  }
+
+  private stopBackchannel() {
+    const src = this.backchannelSource;
+    this.backchannelSource = null;
+    try {
+      src?.stop();
+    } catch {
+      /* already ended */
+    }
+  }
+
+  /** Stops speaking and drops everything queued; the caption shows the rest at once. */
   stop() {
+    const active = this.open || this.playing || this.queue.length > 0;
+    this.halt();
+    if (active) emit("voice:stopped");
+  }
+
+  private halt() {
     this.gen++;
+    this.stopBackchannel();
     this.queue = [];
     this.open = false;
     this.playing = false;

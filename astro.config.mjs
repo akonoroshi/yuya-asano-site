@@ -1,5 +1,8 @@
 // @ts-check
 import { defineConfig } from "astro/config";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { characterCheckout } from "./scripts/character-checkout.mjs";
 
 export default defineConfig({
   // Set the base URL for the site.
@@ -13,4 +16,15 @@ export default defineConfig({
     defaultLocale: "en",
     routing: { prefixDefaultLocale: false },
   },
+  vite: characterCheckout ? {
+    resolve: {
+      alias: {
+        "@tonari/characters/react": join(characterCheckout, "src/react.ts"),
+        "@tonari/characters/gestures": join(characterCheckout, "src/gestures.ts"),
+        "@tonari/characters/models": join(characterCheckout, "src/models/bundled.ts"),
+      },
+      dedupe: ["react", "react-dom", "three"],
+    },
+    server: { fs: { allow: [fileURLToPath(new URL(".", import.meta.url)), characterCheckout] } },
+  } : undefined,
 });

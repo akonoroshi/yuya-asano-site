@@ -28,7 +28,6 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
     slot.dataset.mode === "page" || slot.closest("dialog")?.open === true,
   );
   const [speaking, setSpeaking] = useState(false);
-  const [listening, setListening] = useState(false);
   const [mood, setMood] = useState<Mood>("neutral");
   const initialEvents = useRef(pending);
 
@@ -41,7 +40,6 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
       if (slot.dataset.mode !== "page") {
         setActive(false);
         setSpeaking(false);
-        setListening(false);
         delete slot.dataset.characterLoaded;
         loadedOnce.current = false;
         analyser.current = undefined;
@@ -75,10 +73,11 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
       audioLevel.current = 0;
       setSpeaking(false);
     };
-    const onListening = (event: Event) => {
-      setListening(Boolean((event as CustomEvent<{ on?: boolean }>).detail?.on));
-    };
-    const onBackchannel = () => motion.event("ack", 0.45, 50, "backchannel", "conversation", performance.now() / 1000);
+    // An open microphone keeps the desk-rest pose. Listening nods (voice:nod) and spoken
+    // backchannels (voice:backchannel) both cue the library's listening nod: listen_learn has a
+    // dedicated head nod of listeningNodDeg (5°), where ack is a 2° tilt that's barely visible.
+    // Priority 40 is the library's default for backchannels, below her own speech gestures.
+    const onBackchannel = () => motion.event("listen_learn", 0.6, 40, "backchannel", "conversation", performance.now() / 1000);
     const handlers: Record<(typeof characterEvents)[number], (event: Event) => void> = {
       "chat:open": onOpen,
       "chat:close": onClose,
@@ -87,8 +86,8 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
       "chat:reply-end": onReplyEnd,
       "character:speech-start": onSpeechStart,
       "character:speech-end": onSpeechEnd,
-      "voice:listening": onListening,
       "voice:backchannel": onBackchannel,
+      "voice:nod": onBackchannel,
       "voice:barge-in": () => motion.interrupt(performance.now() / 1000),
     };
     for (const name of characterEvents) window.addEventListener(name, handlers[name]);
@@ -131,7 +130,7 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
     mood: avatarMood(mood),
     reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     phase: "conversation",
-    listening,
+    idleMotion: false,
     onDiagnostics: () => {
       if (loadedOnce.current) return;
       loadedOnce.current = true;

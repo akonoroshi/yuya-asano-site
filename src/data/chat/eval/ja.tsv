@@ -5,3 +5,82 @@ roles	voice	求職中ですか
 dissertation	voice	博士研究を三十秒で説明して
 none	typed	Emmaの研究で明確化の質問はどう評価しましたか
 none	typed	猫の詩を書いて
+# チップのラベル
+ets	typed	ETSでのインターン
+research	typed	研究テーマ
+# 主語つき
+ets	typed	浅野さんはETSで何をしましたか
+research	typed	浅野の研究テーマは何ですか
+roles	typed	浅野さんは仕事を探していますか
+about	typed	浅野について教えて
+# LLMへ
+none	typed	浅野さんの好きな食べ物は何ですか
+# しのへの質問
+chat-how	typed	しのはどういう仕組みですか
+chat-how	typed	答えはどこから来ていますか
+chat-stack	typed	あなたは何のモデルですか
+who	typed	誰が作ったのですか
+# 仕事探し・スキル
+visa	typed	浅野さんはビザのスポンサーが必要ですか
+location	typed	リモートで働けますか
+salary	typed	希望年収はいくらですか
+advisor	typed	浅野さんの指導教員は誰ですか
+skills	typed	どのプログラミング言語を使いますか
+# しの
+capabilities	typed	何ができますか
+privacy	typed	録音していますか
+farewell	typed	さようなら
+experience	typed	経験とスキル
+roles	typed	仕事探し
+# あいさつ・お礼・あいづち
+thanks	typed	ありがとうございました！
+thanks	typed	なるほど、ありがとうございます
+thanks	typed	助かりました
+ack	typed	なるほど
+ack	voice	すごいですね
+farewell	typed	ありがとう、さようなら
+ets	typed	なるほど。では、ETSでは何をしましたか
+research	typed	ありがとうございます！浅野さんの研究テーマは何ですか
+# 前後に言葉がついた質問（入力、包含。常に「〜のことですか？」で確認）
+ets	typed	ちょっと聞きたいんですが、ETSでは何をしましたか
+roles	typed	ところで、仕事を探していますか？
+ets	typed	SigIQの前、ETSでは何をしましたか
+none	typed	浅野さんの好きな論文は何ですか
+# 話題名＋よくある言い方：そのまま回答
+research	typed	研究テーマについて教えてください
+highlights	voice	研究の成果について知りたいです
+visa	typed	ビザのスポンサーのことを聞きたいです
+# どの回答にも当てはまらない自然な質問：提案されてはいけない
+none	typed	強化学習の経験はありますか
+none	typed	入社して最初の3か月で何をしたいですか
+none	typed	学生の指導経験はありますか
+none	typed	一番好きなプログラミング言語とその理由は？
+none	typed	教育の研究に興味を持ったきっかけは？
+none	typed	Kubernetesは使えますか
+none	typed	EMNLP 2025の採択率はどれくらいでしたか
+none	typed	推薦システムの開発経験はありますか
+none	typed	趣味は何ですか
+none	typed	週に何時間くらい働いていますか
+none	typed	プロジェクトでの一番の失敗は何ですか
+none	typed	ジャーナル論文はありますか
+none	typed	授業を教えた経験はありますか
+none	typed	公開したデータセットはありますか
+none	typed	LLMの出力の安全性はどう評価していますか
+none	typed	日本語と英語以外に話せる言語はありますか
+none	typed	ファインチューニングとプロンプトのどちらがいいと思いますか
+none	typed	TAをした授業は何ですか
+none	typed	GitHubのユーザー名は何ですか
+none	typed	2027年5月より前に働き始められますか
+none	typed	受賞歴はありますか
+none	typed	研究資金はどこから出ていますか
+none	typed	どんな統計手法を使いますか
+none	typed	共同研究者と意見が合わないときはどうしますか
+none	typed	次に書いている論文は何ですか
+none	typed	JAXは使ったことがありますか
+none	typed	学部の卒業論文のテーマは何でしたか
+none	typed	このサイトのアクセシビリティはどうなっていますか
+none	typed	音声にはどのブラウザが一番いいですか
+none	typed	しのという名前の由来は何ですか
+# リストにない言い方：包含で提案
+research	typed	研究テーマについて説明してください
+visa	typed	ビザのスポンサーの話を聞かせてください

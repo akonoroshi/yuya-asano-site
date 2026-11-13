@@ -30,6 +30,9 @@ export interface FaqEntry {
   /** Subtopics, in chip order. A topic can be listed under at most two parents. */
   children?: string[];
   questions: { en: string[]; ja: string[] };
+  /** Questions asked of Shino herself, where "you" means her ("How do you work?"). Matched like
+   *  the questions, but never turned into "he"/"Yuya" versions (see variants.ts). */
+  toShino?: { en: string[]; ja: string[] };
   answer: L10n;
   /** Other phrasings of a short conversational answer (greetings, thanks), picked so the same
    *  line isn't said twice in a row. Not for factual answers: those stay a single, checked text. */
@@ -39,7 +42,12 @@ export interface FaqEntry {
 
 // Ordered for what visitors check first: who Yuya is and his level and availability, then
 // evidence of impact, then work history, then the chat itself as a live demo.
-export const startChips = ["about", "highlights", "internships", "chat-how"];
+export const startChips = ["about", "highlights", "experience", "chat-how"];
+
+// Topics where "you" means Shino, not Yuya ("Who are you?", "Nice to meet you"). Every other
+// English phrasing gets "he" and "Yuya" versions at build time (src/lib/chat/variants.ts),
+// so add a topic here if you write one that's addressed to Shino.
+export const shinoTopics = ["who", "greeting", "thanks", "ack", "farewell", "capabilities", "privacy", "accuracy", "language"];
 
 // Starting chips for the chat opened from the corner character on specific pages (up to four),
 // so visitors start with questions about what they're reading. Keys are "project:<file name>"
@@ -59,7 +67,7 @@ export const faq: FaqEntry[] = [
   {
     id: "about",
     chip: { en: "About Yuya", ja: "浅野について" },
-    children: ["research", "dissertation", "companion", "contact"],
+    children: ["research", "dissertation", "companion", "roles"],
     questions: {
       en: ["Tell me about Yuya", "Who is Yuya Asano?", "Introduce Yuya", "Give me a quick intro"],
       ja: ["浅野さんについて教えて", "浅野さんはどんな人ですか", "自己紹介してください", "簡単に紹介してください"],
@@ -85,16 +93,17 @@ export const faq: FaqEntry[] = [
     links: [{ label: { en: "Speech recognition correction", ja: "音声認識の誤り訂正" }, href: "/projects/asr-correction/" }, { label: { en: "LLMs vs. students", ja: "LLMと生徒の解き方" }, href: "/projects/student-solutions/" }, { label: { en: "Emma (LLM agent)", ja: "Emma（LLMエージェント）" }, href: "/projects/emma-agent/" }],
   },
   {
-    id: "internships",
-    chip: { en: "Internships", ja: "インターン経験" },
-    children: ["sigiq", "ets", "jsu"],
+    id: "experience",
+    chip: { en: "Experience & skills", ja: "経験とスキル" },
+    // Up to four chips show at a time; the rest appear as these are answered, in this order.
+    children: ["sigiq", "ets", "llm-experience", "skills", "production", "jsu"],
     questions: {
-      en: ["Where have you interned?", "What is your work experience?", "Do you have industry experience?", "Where have you worked?"],
-      ja: ["どこでインターンをしましたか", "職務経験を教えて", "企業での経験はありますか", "どこで働いたことがありますか"],
+      en: ["What experience do you have?", "Tell me about your experience", "What are your experience and skills?", "What is your work experience?", "Where have you interned?", "Do you have industry experience?", "Where have you worked?", "Internships"],
+      ja: ["経験を教えてください", "どんな経験がありますか", "職歴を教えて", "経験とスキルを教えてください", "どこでインターンをしましたか", "職務経験を教えて", "企業での経験はありますか", "どこで働いたことがありますか", "インターン経験"],
     },
     answer: {
-      en: "[emo:relaxed:0.6][act:confident_claim]Yuya was a machine learning intern at SigIQ.ai in 2026, an NLP research intern at Jackson State University in 2025, and an Ida Lawrence Research Intern at Educational Testing Service (ETS) in 2024. [act:beat]Before his PhD, he did research at Carnegie Mellon University and the University of Toronto.",
-      ja: "[emo:relaxed:0.6][act:confident_claim]2026年にSigIQ.aiで機械学習インターン、2025年にJackson State UniversityでNLPリサーチインターン、2024年にEducational Testing Service（ETS）でリサーチインターンを経験しました。[act:beat]博士課程の前には、カーネギーメロン大学とトロント大学で研究に携わりました。",
+      en: "[emo:happy:0.7][act:confident_claim]Yuya was a machine learning intern at SigIQ.ai in 2026, an NLP research intern at Jackson State University in 2025, and an Ida Lawrence Research Intern at Educational Testing Service (ETS) in 2024. [act:beat]Before his PhD, he did research at Carnegie Mellon University and the University of Toronto. Most of his recent work is building and evaluating LLM systems, in research and in industry.",
+      ja: "[emo:happy:0.7][act:confident_claim]浅野は2026年にSigIQ.aiで機械学習インターン、2025年にジャクソン州立大学でNLPリサーチインターン、2024年にEducational Testing Service（ETS）でリサーチインターンを経験しました。[act:beat]博士課程の前には、カーネギーメロン大学とトロント大学で研究に携わりました。最近は、研究と企業の両方でLLMシステムの開発と評価に取り組んでいます。",
     },
   },
   {
@@ -118,7 +127,7 @@ export const faq: FaqEntry[] = [
     },
     answer: {
       en: "[emo:focused:0.5][act:confident_claim]At Jackson State University (May to August 2025), Yuya proposed retrieval-augmented generation that tailors grading rubrics to students' oral and written answers, and prototyped grading APIs on AWS with LangChain and Docker.",
-      ja: "[emo:focused:0.5][act:confident_claim]Jackson State University（2025年5月〜8月）では、生徒の口頭・記述の回答に合わせて採点ルーブリックを調整する、検索拡張生成（RAG）の手法を提案し、AWS、LangChain、Dockerで採点APIのプロトタイプを開発しました。",
+      ja: "[emo:focused:0.5][act:confident_claim]ジャクソン州立大学（2025年5月〜8月）では、生徒の口頭・記述の回答に合わせて採点ルーブリックを調整する、検索拡張生成（RAG）の手法を提案し、AWS、LangChain、Dockerで採点APIのプロトタイプを開発しました。",
     },
   },
   {
@@ -136,10 +145,14 @@ export const faq: FaqEntry[] = [
   {
     id: "chat-how",
     chip: { en: "How this chat works", ja: "このチャットの仕組み" },
-    children: ["asr", "chat-cost", "chat-stack"],
+    children: ["asr", "chat-cost", "chat-stack", "privacy"],
     questions: {
       en: ["How does this chat work?", "How is this AI implemented?", "How did you build this chatbot?", "Is this ChatGPT?"],
       ja: ["このチャットはどういう仕組みですか", "このAIはどう実装されていますか", "このチャットボットはどう作りましたか", "これはChatGPTですか"],
+    },
+    toShino: {
+      en: ["How do you work?", "How were you built?", "How do you answer questions?", "Where do your answers come from?", "How do you know about Yuya?", "Are you ChatGPT?", "Do you use an LLM?"],
+      ja: ["しのはどういう仕組みですか", "どういう仕組みで答えていますか", "あなたはどうやって作られたのですか", "答えはどこから来ていますか", "浅野のことをどうやって知っているのですか", "あなたはChatGPTですか"],
     },
     answer: {
       en: "[emo:happy:0.7][act:confident_claim]Most questions here never reach a language model. Suggested questions and close matches to curated ones are answered right in your browser. [emo:focused:0.5][act:beat]New questions go to a server that retrieves passages from Yuya's pages and papers, and a language model answers only from those passages.",
@@ -153,6 +166,10 @@ export const faq: FaqEntry[] = [
       en: ["How does voice input work?", "How do you handle speech recognition errors?", "Can I talk to you?"],
       ja: ["音声入力はどういう仕組みですか", "音声認識の誤りにはどう対応していますか", "話しかけてもいいですか"],
     },
+    toShino: {
+      en: ["Can you hear me?", "Do you understand speech?", "How do you understand what I say?", "Can I talk to you out loud?"],
+      ja: ["声は聞こえますか", "話した言葉をどうやって理解しているのですか", "声で話しかけてもいいですか"],
+    },
     answer: {
       en: "[emo:relaxed:0.6][act:confident_claim]Your browser transcribes what you say. [emo:concerned:0.3][act:beat]Recognizers often mishear names like SigIQ, so the site also compares what it heard with likely questions by sound, using the method from Yuya's Alexa Prize work, and asks you to confirm before answering.",
       ja: "[emo:relaxed:0.6][act:confident_claim]話した内容はブラウザが文字に変換します。[emo:concerned:0.3][act:beat]音声認識はSigIQのような名前をよく聞き間違えるので、このサイトでは聞き取った内容を音の近さで想定される質問と照合し、回答する前に確認します。浅野がAlexa Prizeで開発した手法を使っています。",
@@ -165,6 +182,10 @@ export const faq: FaqEntry[] = [
       en: ["How do you keep the cost down?", "How do you limit LLM calls?", "Does every question call an LLM?"],
       ja: ["コストはどう抑えていますか", "LLMの呼び出しをどう減らしていますか", "すべての質問でLLMを使っていますか"],
     },
+    toShino: {
+      en: ["How much do you cost to run?", "Do you call an LLM for every question?"],
+      ja: ["あなたを動かすのにいくらかかりますか", "毎回LLMを呼び出していますか"],
+    },
     answer: {
       en: "[emo:focused:0.6][act:confident_claim]Because the site is public, it's built to call the language model as rarely as possible. Free matching in the browser comes first, then a cheap similarity check turns away off-topic questions, and rate limits plus a daily cap stop runaway use. [emo:happy:0.6][act:beat]Yuya reviews new questions and adds frequent ones as curated answers.",
       ja: "[emo:focused:0.6][act:confident_claim]公開サイトなので、言語モデルの呼び出しをできるだけ減らす設計にしています。まずブラウザ内の無料の照合で答え、次に軽い類似度チェックで関係のない質問を断り、さらに利用回数の制限と1日の上限で使いすぎを防いでいます。[emo:happy:0.6][act:beat]よく来る新しい質問は浅野が確認し、用意された回答に加えています。",
@@ -176,6 +197,10 @@ export const faq: FaqEntry[] = [
     questions: {
       en: ["What is the tech stack?", "What did you use to build this site?", "Which model do you use?"],
       ja: ["技術スタックは何ですか", "このサイトは何で作られていますか", "どのモデルを使っていますか"],
+    },
+    toShino: {
+      en: ["What model are you?", "Which model are you?", "What are you built with?", "What do you run on?"],
+      ja: ["あなたは何のモデルですか", "どのAIを使っていますか", "何で作られていますか"],
     },
     answer: {
       en: "[emo:focused:0.5][act:confident_claim]The site is built with Astro and runs on Cloudflare Workers. Voice input uses the browser's built-in speech recognition, on the device when the browser supports it, and matching by sound uses CMUdict for English and kuromoji for Japanese. Retrieval uses Workers AI embeddings and Vectorize, with Gemini as the main model and a Workers AI model as a backup. [emo:happy:0.7][act:beat]The character is a VRM model.",
@@ -222,14 +247,15 @@ export const faq: FaqEntry[] = [
   },
   {
     id: "roles",
-    // Not a chip: "About Yuya" already says this. Still answers typed questions about jobs.
+    chip: { en: "Job search", ja: "仕事探し" },
+    children: ["visa", "contact"],
     questions: {
       en: ["Are you open to roles?", "Are you looking for a job?", "When do you graduate?", "What kind of roles are you looking for?"],
       ja: ["求職中ですか？", "仕事を探していますか", "いつ卒業しますか", "どんな職種を希望していますか"],
     },
     answer: {
-      en: "[emo:happy:0.8][act:ack]Yes. [act:confident_claim]Yuya finishes his PhD in May 2027 and is open to applied scientist, research scientist, and ML engineer roles. [emo:happy:0.6][act:beat]Email is the best way to reach him: yuya.asano47@gmail.com.",
-      ja: "[emo:happy:0.8][act:ack]はい。[act:confident_claim]浅野は2027年5月に博士号を取得予定で、Applied Scientist、Research Scientist、ML Engineerのポジションを探しています。[emo:happy:0.6][act:beat]連絡はメールが確実です：yuya.asano47@gmail.com。",
+      en: "[emo:happy:0.8][act:ack]Yes. [act:confident_claim]Yuya finishes his PhD in May 2027 and is open to applied scientist, research scientist, and ML engineer roles, in the Bay Area or remote. [emo:happy:0.6][act:beat]Email is the best way to reach him: yuya.asano47@gmail.com.",
+      ja: "[emo:happy:0.8][act:ack]はい。[act:confident_claim]浅野は2027年5月に博士号を取得予定で、ベイエリアまたはリモートで、Applied Scientist、Research Scientist、ML Engineerのポジションを探しています。[emo:happy:0.6][act:beat]連絡はメールが確実です：yuya.asano47@gmail.com。",
     },
     links: [{ label: { en: "CV", ja: "CV（英語）" }, href: "/CV_YuyaAsano.pdf" }],
   },
@@ -488,10 +514,176 @@ export const faq: FaqEntry[] = [
     links: [{ label: { en: "CV", ja: "CV（英語）" }, href: "/CV_YuyaAsano.pdf" }, { label: { en: "LinkedIn", ja: "LinkedIn" }, href: "https://www.linkedin.com/in/yuya-asano-441373124/" }],
   },
   {
+    id: "visa",
+    chip: { en: "Visa sponsorship", ja: "ビザのスポンサー" },
+    questions: {
+      en: ["Do you need visa sponsorship?", "Will you need sponsorship?", "Are you authorized to work in the US?", "What is your visa status?", "Do you require sponsorship?"],
+      ja: ["ビザのスポンサーは必要ですか", "就労ビザのサポートは必要ですか", "アメリカで働く資格はありますか", "ビザのステータスは何ですか"],
+    },
+    answer: {
+      en: "[emo:relaxed:0.6][act:confident_claim]Yes, Yuya will need visa sponsorship. [emo:happy:0.6][act:beat]For details, email him: yuya.asano47@gmail.com.",
+      ja: "[emo:relaxed:0.6][act:confident_claim]はい、浅野はビザのスポンサーが必要です。[emo:happy:0.6][act:beat]詳しくはメールでお問い合わせください：yuya.asano47@gmail.com。",
+    },
+  },
+  {
+    id: "location",
+    questions: {
+      en: ["Where are you located?", "Where do you want to work?", "Are you open to relocation?", "Are you willing to relocate?", "Do you want to work remotely?", "Are you open to remote work?"],
+      ja: ["どこに住んでいますか", "どこで働きたいですか", "引っ越しは可能ですか", "リモートで働けますか", "勤務地の希望はありますか"],
+    },
+    answer: {
+      en: "[emo:happy:0.6][act:confident_claim]Yuya is based in Pittsburgh now, and he's looking for roles in the Bay Area or remote.",
+      ja: "[emo:happy:0.6][act:confident_claim]浅野は現在ピッツバーグに住んでいて、ベイエリアまたはリモートのポジションを探しています。",
+    },
+  },
+  {
+    id: "salary",
+    // Shino never discusses compensation; this keeps the LLM from improvising an answer.
+    questions: {
+      en: ["What are your salary expectations?", "How much do you want to be paid?", "What is your expected compensation?", "What salary are you looking for?"],
+      ja: ["希望年収はいくらですか", "給与の希望はありますか", "希望の報酬はどれくらいですか"],
+    },
+    answer: {
+      en: "[emo:relaxed:0.6][act:beat]That's something Yuya would rather talk about with you directly. You can reach him by email: yuya.asano47@gmail.com.",
+      ja: "[emo:relaxed:0.6][act:beat]その件は、浅野が直接お話ししたいそうです。メールでお問い合わせください：yuya.asano47@gmail.com。",
+    },
+  },
+  {
+    id: "advisor",
+    questions: {
+      en: ["Who is your advisor?", "Who is your PhD advisor?", "Who do you work with at Pitt?", "Who supervises your research?"],
+      ja: ["指導教員は誰ですか", "博士課程の指導教員は誰ですか", "誰の研究室にいますか"],
+    },
+    answer: {
+      en: "[emo:happy:0.6][act:confident_claim]Yuya's PhD advisor is Diane Litman, in the Intelligent Systems Program at the University of Pittsburgh.",
+      ja: "[emo:happy:0.6][act:confident_claim]浅野の指導教員は、ピッツバーグ大学 Intelligent Systems Program のDiane Litman先生です。",
+    },
+  },
+  {
+    id: "skills",
+    chip: { en: "Technical skills", ja: "技術スキル" },
+    questions: {
+      en: ["What are your technical skills?", "What programming languages do you use?", "What tools and frameworks do you use?", "Do you know PyTorch?"],
+      ja: ["技術スキルを教えて", "どのプログラミング言語を使いますか", "どんなツールやフレームワークを使いますか", "PyTorchは使えますか"],
+    },
+    answer: {
+      en: "[emo:focused:0.5][act:confident_claim]Mostly Python, with PyTorch, Hugging Face Transformers, and scikit-learn for machine learning. [act:beat]For LLM work he uses the OpenAI and Azure OpenAI APIs, LangChain, and vLLM for open-weight models, plus SQL, Docker, and AWS. [emo:happy:0.6][act:material_reference]The full list is on his CV.",
+      ja: "[emo:focused:0.5][act:confident_claim]主にPythonで、機械学習にはPyTorch、Hugging Face Transformers、scikit-learnを使っています。[act:beat]LLMの開発では、OpenAIとAzure OpenAIのAPI、LangChain、オープンウェイトのモデルを動かすためのvLLMを使い、ほかにSQL、Docker、AWSも使います。[emo:happy:0.6][act:material_reference]詳しくはCVをご覧ください。",
+    },
+    links: [{ label: { en: "CV", ja: "CV（英語）" }, href: "/CV_YuyaAsano.pdf" }],
+  },
+  {
+    id: "llm-experience",
+    chip: { en: "LLM experience", ja: "LLMの経験" },
+    questions: {
+      en: ["Have you worked with LLMs?", "What is your LLM experience?", "Have you built LLM agents?", "Do you have RAG experience?", "Have you worked with retrieval-augmented generation?"],
+      ja: ["LLMの経験はありますか", "LLMエージェントを作ったことはありますか", "RAGの経験はありますか"],
+    },
+    answer: {
+      en: "[emo:happy:0.7][act:confident_claim]Yes, it's most of his recent work. He built the LLM agent harness behind Emma on Azure OpenAI, used in a 72-participant study, and an LLM and retrieval pipeline at SigIQ.ai that improved macro F1 by .19 to .33. [act:beat]He also evaluates LLMs, for example comparing 13 prompting and sampling methods across 4 models against real student solutions for EMNLP 2025.",
+      ja: "[emo:happy:0.7][act:confident_claim]はい、最近の仕事の中心です。Azure OpenAIでEmmaのLLMエージェントハーネスを開発して72名の実験で使い、SigIQ.aiではLLMと検索のパイプラインでマクロF1を.19〜.33改善しました。[act:beat]LLMの評価にも取り組んでいて、EMNLP 2025では13のプロンプト・サンプリング手法を4つのモデルで試し、生成した解答を実際の生徒の解答と比較しました。",
+    },
+  },
+  {
+    id: "production",
+    chip: { en: "Shipped to users", ja: "実運用の経験" },
+    questions: {
+      en: ["Do you have production experience?", "Have you shipped anything?", "Has your work been deployed?", "Have you built anything real users use?"],
+      ja: ["本番環境での経験はありますか", "製品として提供したものはありますか", "実際に使われたシステムはありますか"],
+    },
+    answer: {
+      en: "[emo:happy:0.7][act:confident_claim]Yes. At SigIQ.ai he shipped a mastery model as a teacher-facing product feature, and his Alexa Prize speech-recognition correction ran with real users. [act:beat]This site is one too: it runs on Cloudflare Workers, with the matching, retrieval, and limits he built.",
+      ja: "[emo:happy:0.7][act:confident_claim]はい。SigIQ.aiでは習熟度推定モデルを教師向けの製品機能として提供し、Alexa Prizeの音声認識の誤り訂正は実際のユーザーに使われました。[act:beat]このサイトもそのひとつで、浅野が作った照合や検索、利用制限の仕組みでCloudflare Workers上で動いています。",
+    },
+  },
+  {
+    id: "capabilities",
+    // No chip: like greetings, it returns to the start chips, which show what to ask.
+    questions: {
+      en: ["What can you do?", "What can I ask you?", "What do you know?", "Help", "What should I ask?"],
+      ja: ["何ができますか", "何を聞けばいいですか", "何を知っていますか", "ヘルプ", "何が聞けますか"],
+    },
+    answer: {
+      en: "[emo:happy:0.8][act:confident_claim]I can tell you about Yuya's research, his experience and skills, his job search, and how this chat works. [act:beat]Pick a topic below, or just ask![act:wait_user]",
+      ja: "[emo:happy:0.8][act:confident_claim]浅野の研究や経験・スキル、仕事探し、それにこのチャットの仕組みについてお話しできます。[act:beat]下から選ぶか、気軽に聞いてくださいね！[act:wait_user]",
+    },
+  },
+  {
+    id: "privacy",
+    chip: { en: "Privacy", ja: "プライバシー" },
+    questions: {
+      en: ["Are you recording me?", "Is my voice saved?", "Do you store my questions?", "Is this conversation private?", "Are you listening to me?"],
+      ja: ["録音していますか", "声は保存されますか", "質問は保存されますか", "この会話は記録されますか"],
+    },
+    answer: {
+      en: "[emo:relaxed:0.6][act:confident_claim]The site never records audio: your browser turns speech into text, on your device when it can, otherwise through its own speech service. [act:beat]Questions I answer from my prepared list stay in your browser. New questions are sent to the site's server, and Yuya keeps logs of those questions and my answers to improve the chat.",
+      ja: "[emo:relaxed:0.6][act:confident_claim]このサイトは音声を録音しません。話した内容はブラウザが文字に変換し、対応していれば端末内で、そうでなければブラウザの音声認識サービスで処理します。[act:beat]用意された回答で答える質問は、ブラウザの中だけで処理されます。新しい質問はサイトのサーバーに送られ、チャットの改善のために、質問と私の回答の記録を浅野が保存しています。",
+    },
+  },
+  {
+    id: "accuracy",
+    questions: {
+      en: ["Can you be wrong?", "How accurate are you?", "Can I trust your answers?", "Do you make mistakes?"],
+      ja: ["間違えることはありますか", "答えは正確ですか", "答えを信用していいですか"],
+    },
+    answer: {
+      en: "[emo:concerned:0.3][act:normalize_error]I can be. Answers to common questions were written and checked by Yuya, but answers to new questions are generated from his site and papers and can contain mistakes. [emo:relaxed:0.6][act:material_reference]For anything important, check his CV or papers, or email him.",
+      ja: "[emo:concerned:0.3][act:normalize_error]はい、ありえます。よくある質問の答えは浅野が書いて確認したものですが、新しい質問への答えはサイトと論文から生成するので、誤りを含むことがあります。[emo:relaxed:0.6][act:material_reference]大事なことは、CVや論文で確認するか、浅野にメールで聞いてくださいね。",
+    },
+    links: [{ label: { en: "CV", ja: "CV（英語）" }, href: "/CV_YuyaAsano.pdf" }],
+  },
+  {
+    id: "language",
+    questions: {
+      en: ["Can you speak Japanese?", "Do you speak Japanese?", "Can we talk in Japanese?"],
+      ja: ["英語で話せますか", "英語は話せますか", "英語でもいいですか"],
+    },
+    answer: {
+      en: "[emo:happy:0.7][act:confident_claim]Yes, I speak English and Japanese! [act:material_reference]Switch the site to Japanese with the language link on the page, and I'll talk with you in Japanese.",
+      ja: "[emo:happy:0.7][act:confident_claim]はい、日本語と英語で話せます！[act:material_reference]「English」のリンクでサイトを英語に切り替えると、英語でお話しします。",
+    },
+  },
+  {
+    id: "ack",
+    // "Cool", "got it", 「なるほど」: matched mostly by social.ts, which catches any combination.
+    // Keeps the chips the visitor had, like thanks: "cool" usually means "keep going".
+    questions: {
+      en: ["Okay", "Cool", "Got it", "I see", "Interesting"],
+      ja: ["なるほど", "わかりました", "すごいですね", "そうなんですね"],
+    },
+    answer: {
+      en: "[emo:happy:0.6][act:ack]Sure! What would you like to hear about next?[act:wait_user]",
+      ja: "[emo:happy:0.6][act:ack]はい！次は何について聞きたいですか？[act:wait_user]",
+    },
+    alternatives: {
+      en: ["[emo:happy:0.6][act:ack]Pick a topic below, or just ask.[act:wait_user]", "[emo:happy:0.6][act:ack]Let me know what else you're curious about![act:wait_user]"],
+      ja: ["[emo:happy:0.6][act:ack]下から話題を選ぶか、気軽に聞いてくださいね。[act:wait_user]", "[emo:happy:0.6][act:ack]ほかにも気になることがあれば、なんでもどうぞ！[act:wait_user]"],
+    },
+  },
+  {
+    id: "farewell",
+    questions: {
+      en: ["Bye", "Goodbye", "See you", "That's all", "I'm done"],
+      ja: ["さようなら", "またね", "バイバイ", "以上です", "おわります"],
+    },
+    answer: {
+      en: "[emo:happy:0.8][act:farewell]Thanks for stopping by! If you'd like to talk with Yuya, you can email him: yuya.asano47@gmail.com.",
+      ja: "[emo:happy:0.8][act:farewell]来てくれてありがとうございました！浅野と話したいときは、メールでどうぞ：yuya.asano47@gmail.com。",
+    },
+    alternatives: {
+      en: ["[emo:happy:0.8][act:farewell]Bye for now! Come back anytime you have more questions about Yuya.", "[emo:happy:0.8][act:farewell]It was nice talking with you! If you'd like to reach Yuya, here's his email: yuya.asano47@gmail.com."],
+      ja: ["[emo:happy:0.8][act:farewell]またいつでも来てくださいね！浅野について聞きたいことがあれば、いつでもどうぞ。", "[emo:happy:0.8][act:farewell]お話しできてうれしかったです！浅野への連絡は、メールでどうぞ：yuya.asano47@gmail.com。"],
+    },
+  },
+  {
     id: "who",
     questions: {
       en: ["Are you Yuya?", "Who are you?", "Who is Shino?", "Are you an AI?", "Is this a real person?"],
       ja: ["あなたは浅野さんですか", "あなたは誰ですか", "しのって誰ですか", "AIですか", "本人ですか"],
+    },
+    toShino: {
+      en: ["Who made you?", "Who built you?", "What are you?", "What is your name?"],
+      ja: ["誰が作ったのですか", "あなたは何者ですか", "名前は何ですか"],
     },
     answer: {
       en: "[emo:happy:0.7][act:greet]I'm Shino, Yuya's AI companion! I'm not Yuya himself. [emo:relaxed:0.6][act:beat]My answers come from his website and papers, and if I'm not sure about something, I'll point you to his email.",

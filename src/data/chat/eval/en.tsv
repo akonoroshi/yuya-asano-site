@@ -12,3 +12,132 @@ none	typed	write me a poem about cats
 sigiq	voice	what did you build at sick iq
 dissertation	voice	explain your dissertation in 30 seconds
 none	voice	how does emma decide which solution to show
+# Chip labels, typed or said exactly as shown
+ets	typed	ETS internship
+highlights	typed	Research highlights
+experience	voice	internships
+# Third person: visitors talk to Shino about Yuya
+ets	typed	What did he do at ETS?
+ets	typed	What did Yuya do at ETS
+ets	typed	Tell me about his ETS internship
+roles	typed	Is he open to roles?
+roles	voice	is yuya looking for a job
+research	typed	What are Yuya's research interests?
+sigiq	typed	What did Yuya Asano build at SigIQ?
+dissertation	voice	what is his dissertation about
+experience	typed	Does he have industry experience?
+contact	typed	What is his email?
+# Still for the LLM
+none	typed	Is he married?
+none	typed	What did he eat for lunch
+none	typed	Can I talk to Yuya?
+# Questions to Shino herself ("you" is Shino)
+chat-how	typed	How do you work?
+chat-how	voice	how were you built
+chat-how	typed	Where do your answers come from?
+chat-stack	typed	What model are you?
+chat-voice	voice	can you hear me
+who	typed	Who made you?
+# Job search, skills, experience
+visa	typed	Does he need visa sponsorship?
+visa	voice	will yuya need sponsorship
+location	typed	Is he open to remote work?
+location	typed	Where is Yuya located?
+salary	typed	What are his salary expectations?
+advisor	typed	Who is his advisor?
+skills	typed	What programming languages does he use?
+llm-experience	typed	Has Yuya worked with LLMs?
+production	typed	Does he have production experience?
+# Shino
+capabilities	typed	What can you do?
+capabilities	voice	what can i ask you
+privacy	typed	Are you recording me?
+accuracy	typed	Can you be wrong?
+language	typed	Can you speak Japanese?
+farewell	typed	Bye
+# The new chips, as typed labels
+experience	typed	Experience & skills
+roles	typed	Job search
+privacy	typed	Privacy
+production	typed	Shipped to users
+experience	typed	What is his work experience?
+experience	typed	Where has Yuya worked?
+# English recognizers hear "Yuya" as "you yeah" and similar (asr-repair.ts)
+ets	voice	what did you yeah do at ets
+ets	voice	what did you ya do at ets
+roles	voice	is you yeah open to roles
+research	voice	what are you yeah's research interests
+about	voice	tell me about you yeah
+research	voice	what does you yeah research
+visa	voice	does yu yah need visa sponsorship
+experience	voice	where has you yeah worked
+# Not a name: "thank you yeah" is thanks
+thanks	voice	thank you yeah
+# Social remarks, in any combination (social.ts)
+thanks	typed	thank you so much
+thanks	typed	thanks, that was really helpful
+thanks	voice	ok thanks
+thanks	typed	great, thank you!
+ack	typed	cool
+ack	voice	got it
+ack	typed	that makes sense
+greeting	typed	hi there
+farewell	typed	ok thanks, bye
+# Not social: a question after the pleasantry
+ets	typed	thanks, what did he do at ETS?
+roles	voice	ok so is he open to roles
+research	typed	Hi Shino, what does Yuya research?
+# Typed, with extra words around a phrasing (containment, always "Did you mean …?")
+# Framing only: the suggestion is what they asked
+ets	typed	I was wondering, what did he do at ETS?
+roles	typed	Quick question: is he open to roles?
+research	typed	could you tell me what are his research interests
+skills	typed	I'd love to know what programming languages does he use
+visa	typed	Sorry if this is blunt, but does he need visa sponsorship?
+ets	typed	I was wondering, what did he do at EST?
+# Adding content: suggested, and "Ask what I said" sends the full question to the LLM
+ets	typed	What did he do at ETS before SigIQ?
+roles	typed	Is he open to roles in Seattle?
+# Nothing to suggest
+none	typed	What privacy laws apply to student data in his studies?
+none	typed	Does Emma use the same LLM as SigIQ?
+none	typed	What is his favorite paper and why?
+# A topic named in a common frame: answered directly (framed variants)
+ets	typed	Tell me about ETS internship
+highlights	typed	Can you tell me about research highlights?
+skills	voice	tell me more about technical skills
+visa	typed	What about visa sponsorship?
+# Realistic questions no curated answer covers: must not be suggested (containment false alarms)
+none	typed	Does he have experience with reinforcement learning?
+none	typed	What would he work on in his first three months?
+none	typed	Has he mentored any students?
+none	typed	What is his favorite programming language and why?
+none	typed	How did he get interested in education research?
+none	typed	Does he know Kubernetes?
+none	typed	What was the acceptance rate at EMNLP 2025?
+none	typed	Has he ever worked on recommendation systems?
+none	typed	What does he do for fun?
+none	typed	How many hours a week does he work?
+none	typed	What is the biggest mistake he made in a project?
+none	typed	Has he published in a journal?
+none	typed	Does he have teaching experience?
+none	typed	What datasets has he released publicly?
+none	typed	How does he evaluate LLM outputs for safety?
+none	typed	Does he speak any languages besides Japanese and English?
+none	typed	What's his opinion on fine-tuning versus prompting?
+none	typed	What courses did he TA?
+none	typed	What is his GitHub username?
+none	typed	Can he start before May 2027?
+none	typed	Did he win any awards?
+none	typed	Who funds his research?
+none	typed	What statistics methods does he use?
+none	typed	How does he handle disagreements with collaborators?
+none	typed	What's the next paper he's working on?
+none	typed	Has he used JAX?
+none	typed	What was his undergraduate thesis about?
+none	typed	How does this site handle accessibility?
+none	typed	What browser works best for voice here?
+none	typed	What inspired the name Shino?
+# A topic named in a frame not in the list: suggested by containment
+highlights	typed	Please explain research highlights
+ets	typed	I'd love to hear about ETS internship

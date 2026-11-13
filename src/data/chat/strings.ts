@@ -1,6 +1,7 @@
 // Shino's interface text and conversational lines, in both languages. Used by Chat.astro, and by
 // scripts/chat/render-voice.mjs, which pre-records every line here that she can say out loud
-// (the opening, fillers, "Did you mean …?", "Something else" replies, repeat lead-ins, errors).
+// (the opening, fillers, backchannels, "Did you mean …?", "Something else" replies, repeat
+// lead-ins, errors).
 // After changing a spoken line, run `npm run chat:voice` so her voice matches the new text.
 export const chatStrings = {
   en: {
@@ -27,6 +28,10 @@ export const chatStrings = {
     idleStopped: "Stopped listening after a quiet minute. Tap the mic to start again.",
     // Said while a new question goes to the LLM in conversation mode. No facts, and short.
     fillers: ["Hmm, let me think.", "Let me see…", "Good question! Let me check."],
+    // Said softly while the visitor is still talking, in conversation mode with Voice on (voice.ts).
+    // Keep them short: they overlap the visitor's speech, and their words are removed from what
+    // the recognizer hears (backchannel.ts), so avoid words visitors use in questions.
+    backchannels: ["Mm-hmm.", "Uh-huh.", "I see.", "Right."],
     suggested: "Suggested questions",
     sources: "Sources",
     // Shino's conversational lines: friendly and upbeat (her personality lives here, not in the
@@ -89,6 +94,7 @@ export const chatStrings = {
     conversationFallback: "このブラウザでは会話モードが使えないため、タップして質問に切り替えました。",
     idleStopped: "しばらく音声がなかったため、聞き取りを止めました。マイクをタップすると再開します。",
     fillers: ["えっと、ちょっと待ってくださいね。", "そうですね…", "調べてみますね。"],
+    backchannels: ["うん。", "うんうん。", "はい。", "ええ。", "なるほど。", "へえ。"],
     suggested: "おすすめの質問",
     sources: "出典",
     didYouMean: ["「{q}」という質問で合っていますか？", "確認させてくださいね。「{q}」という質問ですか？", "聞き間違えていたらごめんなさい。「{q}」という質問でしょうか？"],

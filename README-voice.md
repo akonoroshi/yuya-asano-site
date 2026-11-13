@@ -24,6 +24,16 @@ Both come from the same server, so they sound the same. The rule that keeps it t
 
 If the VM is down, curated answers still play and LLM replies show as text only.
 
+**Captions follow the voice.** With voice on, each sentence of the caption appears while it's
+spoken, spread over its clip's length (`src/lib/chat/pacer.ts`). For LLM replies this means the
+text waits for its audio rather than appearing as soon as it streams in. The voice player reports
+each sentence as it starts (`voice:unit`), and `spokenSpans` in `speech.ts` finds where that
+sentence is in the caption, including text that's shown but not spoken, like an email address or a
+link. Character tags fire when the caption reaches them, as before. When a sentence has no audio
+(no clip yet, the VM is down), it's typed out at the normal speed. When nothing plays within 3 s,
+or the voice stops (barge-in, Voice turned off, closing the chat), the rest appears at once. With
+voice off, or with reduced motion, captions work as before.
+
 **Abuse protection.** Two separate questions: who can reach the TTS server, and what the public
 `/api/tts` endpoint will voice.
 
@@ -155,6 +165,19 @@ delete clips nothing uses. The clips are about 15 MB in total.
 Every build warns about lines without a clip (`render-voice.mjs --check` runs in `prebuild`).
 Those lines play silently until you record them. Nothing breaks.
 
+**Finding a clip.** Clip files are named by a hash of the voice fingerprint, the language, and
+the spoken text, so their names don't say what's in them. To find one, list the lines with their
+files, optionally only those containing some text:
+
+```bash
+npm run chat:voice -- --list mm-hmm     # public/voice/en/a640….mp3  "Mm-hmm."
+npm run chat:voice -- --list うん
+npm run chat:voice -- --list            # every line, in both languages
+```
+
+It needs no server, and marks lines that aren't recorded yet. A change to the voice in
+`voices.json` changes the fingerprint, so every clip gets a new name.
+
 **Pronunciations.** English fixes use misaki's phoneme notation (explained at the top of
 `pronunciations.ts`); Japanese ones are katakana readings. Both are first guesses that haven't been
 checked by ear. To hear one quickly, use the `curl` command above with a sentence containing the word.
@@ -211,6 +234,12 @@ script's path in the cron file. If it can't read vnstat, it logs an error instea
 
 ## Troubleshooting
 
+- **`npm run chat:voice` stops with `fetch failed` / `ECONNRESET`:** the tunnel or the VM dropped
+  the connection. The script retries resets and 502/503/504/52x answers four times (after 1, 2, 4,
+  and 8 s) before giving up, naming the line it was recording. Just run it again: clips already
+  recorded are kept and skipped, and the manifest is only rewritten when a run finishes. If it
+  keeps failing on the same line, check the server (`docker compose logs`) in case that text
+  crashes it.
 - **No sound at all:** the Voice button must be on, and phones need one tap in the chat first.
   On iPhone, the silent switch also mutes web audio.
 - **Curated answers speak, LLM answers don't:** check the Worker logs for `tts_error`.
@@ -238,6 +267,7 @@ tts-server/
   egress-guard.sh      stops the server if outbound traffic nears Oracle's free 10 TB
 src/lib/chat/speech.ts         how text is cut into spoken sentences (browser, Worker, script)
 src/lib/chat/voice.ts          the browser's voice player
+src/lib/chat/pacer.ts          keeps the caption in step with the voice
 src/data/chat/pronunciations.ts  pronunciation fixes
 src/data/chat/strings.ts       the chat's text, including Shino's spoken lines
 worker/tts.ts                  signed sentences and /api/tts
@@ -253,9 +283,17 @@ signatures), the Access headers, an Access refusal never passed on as audio, the
 the 409 rule against a mocked server. The voice player was tested against a simulated browser: clip order,
 filler then live sentences, being talked over, a new reply replacing an old one, staying silent
 on a voice change, and locked audio. The browser and Worker code type-check strictly.
+Caption sync (`pacer.ts`) was tested on a fake clock (curated and streamed replies, a filler,
+a sentence without a clip, no audio at all, the voice stopping, Japanese with an email), and the
+controller end to end with a simulated voice player: each sentence's caption appeared over its own
+audio, and LLM text waited for its sentence's audio. `speechText` was rewritten to report where
+each spoken character comes from; it gives exactly the old output on all 232 curated and UI lines,
+so existing clips keep their names.
 
 Not tested: the Docker build, Kokoro and VOICEVOX themselves, the tunnel and Access, and real
 browsers. In particular, check that Access answers a missing token with a redirect or 403 (the
 Worker treats both as refused).
 On the first real run, check that both languages report `ready` in the gateway logs, listen to a
-few clips in each language, and try the Voice button on iOS Safari and Android Chrome.
+few clips in each language, and try the Voice button on iOS Safari and Android Chrome. Also watch
+a long curated answer and an LLM answer with voice on: the caption should keep pace with her
+voice. If it runs ahead or behind, adjust `audioFraction` in `PACER_CONFIG` (`pacer.ts`).

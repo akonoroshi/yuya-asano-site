@@ -9,7 +9,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fail, kuromojiDir, loadTokenizer, outDir, root } from "./lib.mjs";
 
-const { faq, startChips, pageChips } = await import("../../src/data/chat/faq.ts");
+const { faq, startChips, pageChips, shinoTopics } = await import("../../src/data/chat/faq.ts");
+const { framedVariants, thirdPersonVariants } = await import("../../src/lib/chat/variants.ts");
 const { terms } = await import("../../src/data/chat/terms.ts");
 const { normalizeText } = await import("../../src/lib/chat/normalize.ts");
 const { parseTags } = await import("../../src/lib/chat/tags.ts");
@@ -70,6 +71,8 @@ const visit = (id) => {
   checked.add(id);
 };
 for (const id of parentsOf.keys()) visit(id);
+for (const e of faq) if (e.toShino && (!e.toShino.en?.length || !e.toShino.ja?.length)) fail(`faq.ts: "${e.id}" has toShino questions in only one language`);
+for (const id of shinoTopics) if (!ids.has(id)) fail(`faq.ts: shinoTopics lists "${id}", which doesn't exist`);
 for (const id of startChips) {
   if (!hasChip.has(id)) fail(`faq.ts: start chip "${id}" doesn't exist or has no chip label`);
   if (parentsOf.has(id)) fail(`faq.ts: start chip "${id}" must be top-level, but it is a child of "${parentsOf.get(id).join(", ")}"`);
@@ -114,14 +117,41 @@ for (const lang of ["en", "ja"]) {
   const entries = [];
   const answers = {};
   const owner = new Map(); // normalized text -> id, to catch the same phrasing under two answers
+  // Phrasings per topic: the questions, the chip label (visitors often type or say exactly what a
+  // chip shows), the paraphrases, and the questions asked of Shino herself (toShino). Then, in English, "he"/"Yuya" versions of all of those
+  // (variants.ts). A generated variant never takes a phrasing that another topic wrote by hand.
+  const toShino = (e) => e.toShino?.[lang] ?? [];
+  const written = (e) => [...e.questions[lang], ...(e.chip?.[lang] ? [e.chip[lang]] : []), ...(paraphrases[e.id]?.[lang] ?? []), ...toShino(e)];
+  for (const e of faq) for (const text of written(e)) {
+    const norm = normalizeText(text, lang);
+    if (!norm) continue;
+    if (owner.has(norm) && owner.get(norm) !== e.id) console.warn(`! ${lang}: "${text}" is a phrasing of both "${owner.get(norm)}" and "${e.id}"`);
+    else owner.set(norm, e.id);
+  }
+  let generated = 0;
+  let skipped = 0;
   for (const e of faq) {
     const seen = new Set();
-    for (const text of [...e.questions[lang], ...(paraphrases[e.id]?.[lang] ?? [])]) {
+    const mine = written(e).map((text) => ({ text, variant: false }));
+    if (lang === "en" && !shinoTopics.includes(e.id)) {
+      // Not the toShino questions: there "you" is Shino, so "he"/"Yuya" would change the meaning.
+      const mineToShino = new Set(toShino(e));
+      for (const { text } of [...mine]) if (!mineToShino.has(text)) for (const v of thirdPersonVariants(text)) mine.push({ text: v, variant: true });
+    }
+    // The chip label in common frames ("Tell me about …", 「…について教えてください」), both languages.
+    if (e.chip?.[lang]) for (const v of framedVariants(e.chip[lang], lang)) mine.push({ text: v, variant: true });
+    for (const { text, variant } of mine) {
       const norm = normalizeText(text, lang);
       if (!norm || seen.has(norm)) continue;
+      if (variant && owner.has(norm) && owner.get(norm) !== e.id) {
+        skipped++;
+        continue;
+      }
       seen.add(norm);
-      if (owner.has(norm) && owner.get(norm) !== e.id) console.warn(`! ${lang}: "${text}" is a phrasing of both "${owner.get(norm)}" and "${e.id}"`);
-      owner.set(norm, e.id);
+      if (variant) {
+        if (!owner.has(norm)) generated++;
+        owner.set(norm, e.id);
+      }
       const { ph, oov } = phonemize(text);
       if (lang === "en") for (const w of oov) if (!enOov.has(w)) enOov.set(w, text);
       if (lang === "ja" && !ph) console.warn(`! ja: no phonemes for "${text}"`);
@@ -142,7 +172,7 @@ for (const lang of ["en", "ja"]) {
   const body = { lang, start: startChips, pages: pageChips, entries, answers, phrases, termReadings: lang === "ja" ? termReadings : {} };
   const version = createHash("sha256").update(JSON.stringify(body)).digest("hex").slice(0, 12);
   await fs.writeFile(path.join(outDir, `context.${lang}.json`), JSON.stringify({ version, ...body }));
-  console.log(`✓ context.${lang}.json: ${entries.length} phrasings, ${hasChip.size} chip topics (version ${version})`);
+  console.log(`✓ context.${lang}.json: ${entries.length} phrasings${lang === "en" ? ` (${generated} generated he/Yuya and framed variants${skipped ? `, ${skipped} skipped as another topic's phrasing` : ""})` : ""}, ${hasChip.size} chip topics (version ${version})`);
 }
 console.log(`✓ cmudict.json: ${Object.keys(dict).length} words, ${(dictJson.length / 1e6).toFixed(1)} MB before compression`);
 console.log("✓ kuromoji/: browser bundle and dictionary copied");

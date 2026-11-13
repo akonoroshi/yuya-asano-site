@@ -20,10 +20,24 @@ test("a lead-in ending in a colon is its own unit, so the answer after it matche
   assert.deepEqual(speechUnits("en", `Like I said earlier: ${answer}`), ["Like I said earlier:", ...speechUnits("en", answer)]);
 });
 
-test("links are read by their label, emails are read out, bare URLs are dropped", () => {
+test("links are read by their label, email addresses and bare URLs are never read out", () => {
   assert.equal(speechText("en", "See [his CV](/CV_YuyaAsano.pdf) or https://example.com now."), "See his CV or now.");
-  assert.equal(speechText("en", "Email yuya.asano47@gmail.com."), "Email yuya dot asano47 at gmail dot com.");
-  assert.equal(speechText("ja", "yuya.asano47@gmail.com まで"), "yuya ドット asano47 アット gmail ドット com まで");
+  // After a colon the sentence just ends; elsewhere the address becomes "the address on screen".
+  assert.equal(speechText("en", "Email is the best way to reach him: yuya.asano47@gmail.com."), "Email is the best way to reach him.");
+  assert.equal(speechText("en", "You can email him at yuya.asano47@gmail.com."), "You can email him at the address on screen.");
+  assert.equal(speechText("ja", "連絡はメールが確実です：yuya.asano47@gmail.com。"), "連絡はメールが確実です。");
+  assert.equal(speechText("ja", "yuya.asano47@gmail.com までどうぞ"), "画面のアドレス までどうぞ");
+});
+
+test("no curated line reads out an email address", () => {
+  for (const lang of ["en", "ja"] as const) {
+    for (const e of faq) {
+      for (const t of [e.answer[lang], ...(e.alternatives?.[lang] ?? [])]) {
+        const spoken = speechUnits(lang, parseTags(t).text).join(" ");
+        assert.ok(!/@|gmail|アット|on screen|画面のアドレス/.test(spoken), `${lang} "${e.id}": ${spoken}`);
+      }
+    }
+  }
 });
 
 test("Japanese splits after 。！？ and keeps closing brackets with their sentence", () => {

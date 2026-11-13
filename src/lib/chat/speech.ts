@@ -20,22 +20,102 @@ const EMAIL_RE = /\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
 // English words that end with a period but don't end a sentence.
 const ABBREV = new Set(["e.g", "i.e", "etc", "vs", "dr", "mr", "mrs", "ms", "prof", "st", "no", "fig", "approx", "ph.d", "u.s"]);
 
-/** The text as it should be spoken: link labels without their URLs, emails read out, no bare URLs. */
+// An email address is long to listen to and is on screen anyway, so it's never read out. After a
+// colon ("Email is the best way to reach him: …") the sentence simply ends; anywhere else (often
+// in LLM replies, "email him at …") it becomes "the address on screen".
+const EMAIL_AFTER_COLON_RE = /\s*[:：]\s*[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+const EMAIL_SPOKEN: Record<Lang, string> = { en: "the address on screen", ja: "画面のアドレス" };
+
+/** The text as it should be spoken: link labels without their URLs, no email addresses, no bare URLs. */
 export function speechText(lang: Lang, text: string): string {
-  return text
-    .replace(LINK_RE, "$1")
-    .replace(EMAIL_RE, (m) => speakEmail(lang, m))
-    .replace(URL_RE, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return spokenWithMap(lang, text).spoken;
 }
 
-function speakEmail(lang: Lang, email: string): string {
-  const [user, domain] = email.split("@");
-  const dot = lang === "ja" ? " ドット " : " dot ";
-  const at = lang === "ja" ? " アット " : " at ";
-  return user.split(".").join(dot) + at + domain.split(".").join(dot);
+// Sticky versions, tried at each position in one pass (same patterns and priority as above).
+const sticky = (re: RegExp) => new RegExp(re.source, "y");
+const STICKY = { link: sticky(LINK_RE), emailAfterColon: sticky(EMAIL_AFTER_COLON_RE), email: sticky(EMAIL_RE), url: sticky(URL_RE) };
+
+/**
+ * speechText, plus where each spoken character came from in the displayed text: `map[i]` is the
+ * index in `text` just after spoken character i. The caption uses it to show each sentence while
+ * its audio plays (spokenSpans).
+ */
+function spokenWithMap(lang: Lang, text: string): { spoken: string; map: number[] } {
+  const out: string[] = [];
+  const map: number[] = [];
+  const put = (s: string, end: (k: number) => number) => {
+    for (let k = 0; k < s.length; k++) {
+      out.push(s[k]);
+      map.push(end(k));
+    }
+  };
+  const at = (re: RegExp, i: number) => {
+    re.lastIndex = i;
+    return re.exec(text);
+  };
+  for (let i = 0; i < text.length; ) {
+    let m: RegExpExecArray | null;
+    if ((m = at(STICKY.link, i))) {
+      // "[label](url)": the label is spoken; its last character also covers the URL part.
+      const label = m[1];
+      const labelStart = i + 1;
+      const end = i + m[0].length;
+      put(label, (k) => (k === label.length - 1 ? end : labelStart + k + 1));
+      i = end;
+    } else if ((m = at(STICKY.emailAfterColon, i))) {
+      // Nothing spoken; the next spoken character (usually the period) covers it.
+      i += m[0].length;
+    } else if ((m = at(STICKY.email, i))) {
+      const end = i + m[0].length;
+      put(EMAIL_SPOKEN[lang], () => end);
+      i = end;
+    } else if ((m = at(STICKY.url, i))) {
+      i += m[0].length;
+    } else {
+      put(text[i], () => i + 1);
+      i++;
+    }
+  }
+  // Collapse whitespace runs to one space and trim, keeping the map in step.
+  const spoken: string[] = [];
+  const smap: number[] = [];
+  for (let k = 0; k < out.length; k++) {
+    if (/\s/.test(out[k])) {
+      if (!spoken.length || spoken[spoken.length - 1] === " ") continue;
+      spoken.push(" ");
+      smap.push(map[k]);
+    } else {
+      spoken.push(out[k]);
+      smap.push(map[k]);
+    }
+  }
+  while (spoken[spoken.length - 1] === " ") {
+    spoken.pop();
+    smap.pop();
+  }
+  return { spoken: spoken.join(""), map: smap };
 }
+
+/**
+ * Where each spoken unit is in the displayed text: `end` is the index in `text` where its
+ * caption is complete. Units are exactly speechUnits(lang, text), in order.
+ */
+export function spokenSpans(lang: Lang, text: string): { unit: string; end: number }[] {
+  const { spoken, map } = spokenWithMap(lang, text);
+  const spans: { unit: string; end: number }[] = [];
+  let from = 0;
+  for (const unit of speechUnits(lang, text)) {
+    const i = spoken.indexOf(unit, from);
+    if (i < 0) break; // can't happen: units are pieces of the spoken text
+    from = i + unit.length;
+    spans.push({ unit, end: map[from - 1] });
+  }
+  // The last unit's caption includes anything after it that isn't spoken (a trailing URL).
+  if (spans.length) spans[spans.length - 1].end = Math.max(spans[spans.length - 1].end, trimmedEnd(text));
+  return spans;
+}
+
+const trimmedEnd = (text: string) => text.replace(/\s+$/, "").length;
 
 /** Splits spoken text into units: sentences, with very long ones cut at a comma. */
 export function speechUnits(lang: Lang, text: string): string[] {

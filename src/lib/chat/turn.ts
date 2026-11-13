@@ -32,10 +32,20 @@ export const TURN_CONFIG = {
     minSpeechMs: 500, // speech over Shino this long is an interruption…
     // …and so is any recognized word that isn't a backchannel, however short.
   },
+  // Silent listening nods while the visitor talks (ListeningNods): a short way into a pause, at a
+  // low-pitch cue (pitch.ts), and now and then during a long stretch without either, so Shino
+  // never looks frozen. Never closer together than minGapMs.
   nod: {
     afterPauseMs: [250, 450] as [number, number], // nod this long into a pause (random in range)
-    minSpeechMs: 600, // only after the visitor has said something, not after a cough
-    cooldownMs: { en: 2500, ja: 1600 } as Record<Lang, number>, // あいづち come more often in Japanese
+    minSpeechMs: 700, // as in Ward & Tsukahara's rules, not after a cough
+    minGapMs: { en: 1500, ja: 1200 } as Record<Lang, number>, // あいづち come more often in Japanese
+    stretchMs: [3000, 5000] as [number, number], // a gentle nod after this long without one (random)
+  },
+  // Spoken backchannels ("mm-hmm", 「うん」), at Ward & Tsukahara's low-pitch cue, which they
+  // were fitted to. Much rarer than nods: their rule predicts more than people produce.
+  vocal: {
+    minGapMs: { en: 4000, ja: 2500 } as Record<Lang, number>,
+    notBeforeMs: 2000, // not in the first two seconds of a turn
   },
   idleStopMs: 90_000, // stop listening after this long with no speech, so the mic isn't left on
 };
@@ -220,13 +230,18 @@ export function isBargeIn(speechMs: number, transcript: string, lang: Lang, cfg 
 /* ---------- Nodding while the visitor talks ---------- */
 
 /**
- * Decides when Shino nods: a short way into a pause, after some speech, at most once per pause,
- * and not again until the cooldown has passed. `random` is injectable for the tests.
+ * When Shino nods while the visitor talks. Three triggers, all sharing one minimum gap:
+ *   pause    a short way into a pause, once per pause, after some speech
+ *   cue      a prosodic cue (the low-pitch rule in pitch.ts, which conversation.ts runs)
+ *   stretch  a gentle nod after a long stretch of speech with no nod, so she never looks frozen
+ * `random` is injectable for the tests.
  */
-export class NodScheduler {
+export class ListeningNods {
   private lastNodAt = -Infinity;
+  private turnStartedAt = 0;
   private noddedThisPause = false;
-  private target = 0;
+  private pauseTarget = 0;
+  private stretchTarget = 0;
   private lang: Lang;
   private cfg: typeof TURN_CONFIG.nod;
   private random: () => number;
@@ -235,30 +250,63 @@ export class NodScheduler {
     this.lang = lang;
     this.cfg = cfg;
     this.random = random;
-    this.pickTarget();
+    this.pickTargets();
   }
 
-  private pickTarget() {
-    const [lo, hi] = this.cfg.afterPauseMs;
-    this.target = lo + (hi - lo) * this.random();
+  private between([lo, hi]: [number, number]) {
+    return lo + (hi - lo) * this.random();
   }
 
-  /** Call when speech resumes, so the next pause can get a nod. */
+  private pickTargets() {
+    this.pauseTarget = this.between(this.cfg.afterPauseMs);
+    this.stretchTarget = this.between(this.cfg.stretchMs);
+  }
+
+  private allowed(now: number) {
+    return now - this.lastNodAt >= this.cfg.minGapMs[this.lang];
+  }
+
+  /** A new turn: the stretch clock starts now. */
+  startTurn(now: number) {
+    this.turnStartedAt = now;
+    this.noddedThisPause = false;
+    this.pickTargets();
+  }
+
+  /** Speech resumed after a pause, so the next pause can get a nod. */
   speechResumed() {
     this.noddedThisPause = false;
-    this.pickTarget();
+    this.pauseTarget = this.between(this.cfg.afterPauseMs);
   }
 
-  /**
-   * Call every frame during a pause in the visitor's turn. `pauseMs` is the silence so far,
-   * `spokenMs` how much the visitor has said in this turn. Returns true when it's time to nod.
-   */
-  shouldNod(now: number, pauseMs: number, spokenMs: number, turnEndMs: number): boolean {
-    if (this.noddedThisPause || spokenMs < this.cfg.minSpeechMs) return false;
-    if (pauseMs < this.target || pauseMs >= turnEndMs) return false;
-    if (now - this.lastNodAt < this.cfg.cooldownMs[this.lang]) return false;
-    this.noddedThisPause = true;
+  /** Any nod (or spoken backchannel, which comes with one) restarts the gap and the stretch clock. */
+  nodded(now: number) {
     this.lastNodAt = now;
+    this.stretchTarget = this.between(this.cfg.stretchMs);
+  }
+
+  /** Every frame of a pause: `pauseMs` silence so far, `spokenMs` speech in the turn. */
+  pause(now: number, pauseMs: number, spokenMs: number, turnEndMs: number): boolean {
+    if (this.noddedThisPause || spokenMs < this.cfg.minSpeechMs) return false;
+    if (pauseMs < this.pauseTarget || pauseMs >= turnEndMs || !this.allowed(now)) return false;
+    this.noddedThisPause = true;
+    this.nodded(now);
+    return true;
+  }
+
+  /** A prosodic cue fired: nod unless one was too recent. */
+  cue(now: number): boolean {
+    if (!this.allowed(now)) return false;
+    this.nodded(now);
+    return true;
+  }
+
+  /** Every frame while the visitor speaks: a gentle nod after a long stretch without one. */
+  speaking(now: number, spokenMs: number): boolean {
+    if (spokenMs < this.cfg.minSpeechMs) return false;
+    const since = Math.max(this.lastNodAt, this.turnStartedAt);
+    if (now - since < this.stretchTarget || !this.allowed(now)) return false;
+    this.nodded(now);
     return true;
   }
 }

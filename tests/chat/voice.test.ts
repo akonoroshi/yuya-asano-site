@@ -19,7 +19,7 @@ g.window = win;
 g.document = Object.assign(new EventTarget(), { hidden: false });
 const store = new Map<string, string>();
 g.sessionStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
-for (const name of ["character:speech-start", "character:speech-end", "character:voice-state"]) {
+for (const name of ["character:speech-start", "character:speech-end", "character:voice-state", "voice:backchannel-played"]) {
   win.addEventListener(name, () => events.push(name));
 }
 
@@ -32,6 +32,10 @@ class FakeAudioContext {
   async resume() {}
   createAnalyser() {
     return { fftSize: 0, connect() {} };
+  }
+  createGain() {
+    const node = { gain: { value: 1 }, connect: () => node };
+    return node;
   }
   async decodeAudioData(b: ArrayBuffer) {
     return { label: label(b) };
@@ -190,4 +194,53 @@ test("a voice conversation turns voice on, unless the visitor turned it off in t
   player.autoEnable();
   assert.equal(player.enabled, false);
   assert.equal(store.get("chat:voice"), "off");
+});
+
+const BACKCHANNELS = ["Mm-hmm.", "Uh-huh.", "I see.", "Right."];
+
+test("backchannel: plays softly when idle, as its own event, never as a turn", async () => {
+  clipUnits = BACKCHANNELS.flatMap((l) => speechUnits("en", l));
+  player.setEnabled(true);
+  events = [];
+  let units = 0;
+  win.addEventListener("voice:unit", () => units++);
+  emit("voice:backchannel");
+  await until(() => events.includes("voice:backchannel-played"));
+  assert.equal(played.length, 1);
+  assert.equal(units, 0, "no voice:unit");
+  assert.ok(clipUnits.map((u) => `clip:${u}`).includes(played[0]));
+  assert.ok(!events.includes("character:speech-start"), "no lip sync, not a turn");
+});
+
+test("backchannel: skipped while a reply plays, and when Voice is off", async () => {
+  clipUnits = [...BACKCHANNELS.flatMap((l) => speechUnits("en", l)), ...speechUnits("en", ANSWER)];
+  emit("voice:backchannel");
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(played, [], "Voice is off");
+  player.setEnabled(true);
+  emit("chat:reply-start", { text: ANSWER });
+  emit("voice:backchannel"); // while the reply is open
+  emit("chat:reply-end");
+  await until(() => events.includes("character:speech-end"));
+  assert.deepEqual(played, speechUnits("en", ANSWER).map((u) => `clip:${u}`), "only the reply played");
+});
+
+test("backchannel: never the same line twice in a row, and none without a clip", async () => {
+  clipUnits = BACKCHANNELS.flatMap((l) => speechUnits("en", l));
+  player.setEnabled(true);
+  for (let k = 0; k < 8; k++) {
+    emit("voice:backchannel");
+    await until(() => played.length === k + 1);
+    await new Promise((r) => setTimeout(r, 10)); // let it end
+  }
+  for (let k = 1; k < played.length; k++) assert.notEqual(played[k], played[k - 1]);
+  clipUnits = [];
+  const before = played.length;
+  const fresh = new VoicePlayer("en"); // a new manifest with no clips
+  player.setEnabled(false);
+  player = fresh;
+  player.setEnabled(true);
+  emit("voice:backchannel");
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(played.length, before, "no clip: silent");
 });

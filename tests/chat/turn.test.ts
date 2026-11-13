@@ -8,7 +8,7 @@ import {
   isBargeIn,
   isHesitation,
   levelDb,
-  NodScheduler,
+  ListeningNods,
   parseConfirm,
   prependToAlternatives,
   TURN_CONFIG,
@@ -116,19 +116,32 @@ test("barge-in: words or long speech interrupt; backchannels don't", () => {
   assert.ok(isBargeIn(150, "ちょっと待って", "ja"));
 });
 
-test("nods: once per pause, after some speech, with a cooldown", () => {
-  const nods = new NodScheduler("en", TURN_CONFIG.nod, () => 0); // nod at the earliest point in the range
+test("nods: once per pause, after some speech, with a minimum gap", () => {
+  const nods = new ListeningNods("en", TURN_CONFIG.nod, () => 0); // earliest point in each range
+  nods.startTurn(0);
   const end = 1400;
-  assert.ok(!nods.shouldNod(1000, 300, 200, end), "not after only 200 ms of speech");
-  assert.ok(!nods.shouldNod(1000, 100, 1000, end), "not right at the start of a pause");
-  assert.ok(nods.shouldNod(1000, 260, 1000, end));
-  assert.ok(!nods.shouldNod(1020, 280, 1000, end), "only once per pause");
+  assert.ok(!nods.pause(1000, 300, 200, end), "not after only 200 ms of speech");
+  assert.ok(!nods.pause(1000, 100, 1000, end), "not right at the start of a pause");
+  assert.ok(nods.pause(1000, 260, 1000, end));
+  assert.ok(!nods.pause(1020, 280, 1000, end), "only once per pause");
   nods.speechResumed();
-  assert.ok(!nods.shouldNod(2000, 300, 2000, end), "cooldown");
+  assert.ok(!nods.pause(2000, 300, 2000, end), "within the minimum gap");
   nods.speechResumed();
-  assert.ok(nods.shouldNod(4000, 300, 3000, end));
+  assert.ok(nods.pause(3000, 300, 3000, end));
   nods.speechResumed();
-  assert.ok(!nods.shouldNod(8000, 1500, 3000, end), "never once the turn is over");
+  assert.ok(!nods.pause(8000, 1500, 3000, end), "never once the turn is over");
+});
+
+test("nods: a gentle nod during a long stretch without one, and cues respect the gap", () => {
+  const nods = new ListeningNods("en", TURN_CONFIG.nod, () => 0); // stretch target: 3000 ms
+  nods.startTurn(0);
+  assert.ok(!nods.speaking(2000, 2000), "not before the stretch");
+  assert.ok(nods.speaking(3000, 3000), "after 3 s of speech with no nod");
+  assert.ok(!nods.speaking(4000, 4000), "the stretch clock restarted");
+  assert.ok(!nods.cue(4000), "a cue within 1.5 s of a nod waits");
+  assert.ok(nods.cue(4600));
+  assert.ok(!nods.speaking(7000, 7000), "a cue restarts the stretch clock too");
+  assert.ok(nods.speaking(7600, 7600));
 });
 
 test("spoken answers to Did you mean", () => {

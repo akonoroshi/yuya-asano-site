@@ -6,6 +6,7 @@
 // maxAlternatives is only a maximum. The spec lets a browser return fewer, so callers read
 // however many alternatives come back. Counts are reported to /api/telemetry so you can see
 // what each browser actually returns.
+import { repairAlternatives, repairTranscript } from "./asr-repair.ts";
 import type { Lang } from "./types.ts";
 
 /* Minimal typings: the Web Speech API is not in TypeScript's DOM library yet. */
@@ -136,7 +137,7 @@ export class Listener {
           if (r.isFinal) {
             final = [];
             for (let k = 0; k < r.length; k++) final.push(r[k].transcript.trim());
-          } else this.onInterim(r[0].transcript);
+          } else this.onInterim(repairTranscript(r[0].transcript, this.lang));
         }
       };
       rec.onerror = (e) => {
@@ -146,7 +147,8 @@ export class Listener {
         this.rec = null;
         if (failed === "phrases-not-supported") return reject("phrases-not-supported");
         if (failed === "not-allowed" || failed === "service-not-allowed") return reject("not-allowed" satisfies ListenError);
-        const alternatives = [...new Set(final.filter(Boolean))];
+        // Known mishearings ("you yeah" for Yuya) are fixed before anything else sees them.
+        const alternatives = repairAlternatives(final.filter(Boolean), this.lang);
         if (!alternatives.length) return reject((failed && failed !== "no-speech" && failed !== "aborted" ? "unavailable" : "no-speech") satisfies ListenError);
         report(this.lang, final.length, local, "tap");
         resolve({ alternatives, local });
