@@ -24,6 +24,16 @@ Both come from the same server, so they sound the same. The rule that keeps it t
 
 If the VM is down, curated answers still play and LLM replies show as text only.
 
+**Captions follow the voice.** With voice on, each sentence of the caption appears while it's
+spoken, spread over its clip's length (`src/lib/chat/pacer.ts`). For LLM replies this means the
+text waits for its audio rather than appearing as soon as it streams in. The voice player reports
+each sentence as it starts (`voice:unit`), and `spokenSpans` in `speech.ts` finds where that
+sentence is in the caption, including text that's shown but not spoken, like an email address or a
+link. Character tags fire when the caption reaches them, as before. When a sentence has no audio
+(no clip yet, the VM is down), it's typed out at the normal speed. When nothing plays within 3 s,
+or the voice stops (barge-in, Voice turned off, closing the chat), the rest appears at once. With
+voice off, or with reduced motion, captions work as before.
+
 **Abuse protection.** Two separate questions: who can reach the TTS server, and what the public
 `/api/tts` endpoint will voice.
 
@@ -238,6 +248,7 @@ tts-server/
   egress-guard.sh      stops the server if outbound traffic nears Oracle's free 10 TB
 src/lib/chat/speech.ts         how text is cut into spoken sentences (browser, Worker, script)
 src/lib/chat/voice.ts          the browser's voice player
+src/lib/chat/pacer.ts          keeps the caption in step with the voice
 src/data/chat/pronunciations.ts  pronunciation fixes
 src/data/chat/strings.ts       the chat's text, including Shino's spoken lines
 worker/tts.ts                  signed sentences and /api/tts
@@ -253,9 +264,17 @@ signatures), the Access headers, an Access refusal never passed on as audio, the
 the 409 rule against a mocked server. The voice player was tested against a simulated browser: clip order,
 filler then live sentences, being talked over, a new reply replacing an old one, staying silent
 on a voice change, and locked audio. The browser and Worker code type-check strictly.
+Caption sync (`pacer.ts`) was tested on a fake clock (curated and streamed replies, a filler,
+a sentence without a clip, no audio at all, the voice stopping, Japanese with an email), and the
+controller end to end with a simulated voice player: each sentence's caption appeared over its own
+audio, and LLM text waited for its sentence's audio. `speechText` was rewritten to report where
+each spoken character comes from; it gives exactly the old output on all 232 curated and UI lines,
+so existing clips keep their names.
 
 Not tested: the Docker build, Kokoro and VOICEVOX themselves, the tunnel and Access, and real
 browsers. In particular, check that Access answers a missing token with a redirect or 403 (the
 Worker treats both as refused).
 On the first real run, check that both languages report `ready` in the gateway logs, listen to a
-few clips in each language, and try the Voice button on iOS Safari and Android Chrome.
+few clips in each language, and try the Voice button on iOS Safari and Android Chrome. Also watch
+a long curated answer and an LLM answer with voice on: the caption should keep pace with her
+voice. If it runs ahead or behind, adjust `audioFraction` in `PACER_CONFIG` (`pacer.ts`).

@@ -26,6 +26,8 @@ type SiteText = {
   linkLabels: Record<LinkKey, string>;
   experience: Row[];
   education: Row[];
+  /** For the chat's fact sheet only (not shown on the page): what the LLM may say about the job search. */
+  jobSearch: string;
 };
 
 export const text: Record<Lang, SiteText> = {
@@ -59,6 +61,7 @@ export const text: Record<Lang, SiteText> = {
       { org: "University of Pittsburgh", role: "PhD, Intelligent Systems", desc: "Advised by Diane Litman. GPA 3.85.", date: "2021 – 2027" },
       { org: "University of Toronto", role: "Honours BSc, Computer Science", desc: "AI focus. GPA 3.97.", date: "2018 – 2021" },
     ],
+    jobSearch: "Based in Pittsburgh. Looking for roles in the Bay Area or remote. Will need visa sponsorship. Does not discuss salary or compensation here: direct those questions to email.",
   },
 
   ja: {
@@ -91,5 +94,6 @@ export const text: Record<Lang, SiteText> = {
       { org: "ピッツバーグ大学", role: "博士課程（Intelligent Systems）", desc: "指導教員：Diane Litman。GPA 3.85。", date: "2021年〜2027年（予定）" },
       { org: "トロント大学", role: "学士（コンピュータサイエンス）", desc: "AI専攻。GPA 3.97。", date: "2018年〜2021年" },
     ],
+    jobSearch: "現在ピッツバーグ在住。ベイエリアまたはリモートのポジションを希望。ビザのスポンサーが必要。給与・報酬についてはここでは話さず、メールでの問い合わせを案内する。",
   },
 };

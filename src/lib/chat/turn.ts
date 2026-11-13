@@ -32,9 +32,11 @@ export const TURN_CONFIG = {
     minSpeechMs: 500, // speech over Shino this long is an interruption…
     // …and so is any recognized word that isn't a backchannel, however short.
   },
+  // Nods in pauses: only until the visitor's pitch range is known (about 1 s of their voice).
+  // After that, Ward & Tsukahara's low-pitch rule decides (pitch.ts, PITCH_RULE).
   nod: {
     afterPauseMs: [250, 450] as [number, number], // nod this long into a pause (random in range)
-    minSpeechMs: 600, // only after the visitor has said something, not after a cough
+    minSpeechMs: 700, // as in Ward & Tsukahara's rules, not after a cough
     cooldownMs: { en: 2500, ja: 1600 } as Record<Lang, number>, // あいづち come more often in Japanese
   },
   idleStopMs: 90_000, // stop listening after this long with no speech, so the mic isn't left on

@@ -5,8 +5,8 @@ import { profile, text } from "../site.ts";
 import type { Lang } from "../../lib/chat/types.ts";
 
 const labels: Record<Lang, Record<string, string>> = {
-  en: { name: "Name", now: "Now", about: "About (in Yuya's own words)", experience: "Experience", education: "Education", contact: "Contact", links: "Links" },
-  ja: { name: "氏名", now: "現在", about: "概要（本人の言葉）", experience: "職歴", education: "学歴", contact: "連絡先", links: "リンク" },
+  en: { name: "Name", now: "Now", about: "About (in Yuya's own words)", experience: "Experience", education: "Education", jobSearch: "Job search", contact: "Contact", links: "Links" },
+  ja: { name: "氏名", now: "現在", about: "概要（本人の言葉）", experience: "職歴", education: "学歴", jobSearch: "仕事探し", contact: "連絡先", links: "リンク" },
 };
 
 function build(lang: Lang): string {
@@ -24,6 +24,7 @@ function build(lang: Lang): string {
     `${l.about}: ${s.statement} ${s.lede.join(" ")}`,
     `${l.experience}:\n${rows(s.experience)}`,
     `${l.education}:\n${rows(s.education)}`,
+    `${l.jobSearch}: ${s.jobSearch}`,
     `${l.contact}: ${profile.email}`,
     `${l.links}:\n${links}`,
   ].join("\n");

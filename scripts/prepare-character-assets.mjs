@@ -2,9 +2,10 @@ import { copyFile, mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { characterCheckout } from "./character-checkout.mjs";
 
 const require = createRequire(import.meta.url);
-const source = join(dirname(require.resolve("@tonari/characters/package.json")), "assets");
+const source = join(characterCheckout ?? dirname(require.resolve("@tonari/characters/package.json")), "assets");
 const destination = fileURLToPath(new URL("../public/characters/", import.meta.url));
 
 const files = [

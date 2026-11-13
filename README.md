@@ -53,7 +53,7 @@ npm ci              # installs from package-lock.json
 npm run dev         # http://localhost:4321
 ```
 
-Dev and production builds copy Shino's assets from the installed package into `public/characters/`. To update her model, textures, animations, or renderer, update the shared repository and run `npm install 'github:akonoroshi/vrm-characters#COMMIT_SHA'` with the new commit, then commit the manifest and lockfile.
+With a sibling `../vrm-characters` checkout, dev and build load its current TypeScript source and copy its Shino assets into `public/characters/`. Run `npm ci` in the shared checkout once to install its dependencies. Restart dev to copy any changed assets. Without that checkout, the site uses the installed package and its assets.
 
 ### Other commands
 
@@ -141,6 +141,10 @@ Note: GitHub pauses scheduled workflows in public repositories after 60 days wit
 Every push to `main` then deploys automatically, and branches get preview URLs.
 
 GitHub CI uses an Actions secret with the same name and its own read-only deploy key. Fork and Dependabot PRs skip the build job because it requires access to that Actions secret.
+
+CI and Cloudflare resolve the latest compatible shared commit before installing dependencies. They follow `codex/shared-prepared-gesture-playback` until `vrm-characters/main` includes the checked-in pin, then follow `main`. The install script logs the resolved commit and updates the lockfile in the build workspace.
+
+To rebuild the live site when the shared package changes, create a Cloudflare Workers Builds Deploy Hook for the site's production branch. Save its URL as the `YUYA_ASANO_SITE_DEPLOY_HOOK` Actions secret in `akonoroshi/vrm-characters`. The shared package's CI calls the hook after its checks pass on the tracked branches.
 
 ## Structure
 

@@ -18,12 +18,19 @@ export interface MatchConfig {
   minContextPh: number;
   /** Hypotheses are truncated to this many phonemes. */
   maxHypPh: number;
+  /** Containment (typed input): phrasings shorter than this are too generic to look for inside a
+   *  question. English counts words, Japanese characters (normalized). Set from measurements: on
+   *  realistic questions no topic covers, no setting produced a suggestion; shorter minimums
+   *  catch more framed questions ("Please explain research highlights"), and single English
+   *  words ("Privacy") were the main source of suggestions for questions that merely mention a
+   *  topic's wording. Every containment match is confirmed, so a false one costs one tap. */
+  containMin: number;
 }
 
 // Starting points. Tune them with `npm run chat:eval` on your own test sets.
 export const MATCH_CONFIG: Record<Lang, MatchConfig> = {
-  en: { fuzzyThreshold: 0.92, coverage: 0.8, range: 1.5, vowelWeight: 1, minContextPh: 6, maxHypPh: 160 },
-  ja: { fuzzyThreshold: 0.9, coverage: 0.8, range: 1.5, vowelWeight: 0.5, minContextPh: 8, maxHypPh: 200 },
+  en: { fuzzyThreshold: 0.92, coverage: 0.8, range: 1.5, vowelWeight: 1, minContextPh: 6, maxHypPh: 160, containMin: 2 },
+  ja: { fuzzyThreshold: 0.9, coverage: 0.8, range: 1.5, vowelWeight: 0.5, minContextPh: 8, maxHypPh: 200, containMin: 4 },
 };
 
 /* ---------------- Fuzzy matching ---------------- */
@@ -74,6 +81,48 @@ export function fuzzyRoute(normalizedAlternatives: string[], entries: ContextEnt
     }
   }
   return { kind: "none" };
+}
+
+/* ---------------- Containment (typed input) ---------------- */
+
+/**
+ * Does a typed question contain one of the phrasings, give or take a typo? "I was wondering,
+ * what did he do at ETS?" contains "What did he do at ETS?". The typed counterpart of the phonetic
+ * step, which does this by sound for voice: the extra words may be framing or may ask for more
+ * ("…before SigIQ?"), so a match is always confirmed with "Did you mean …?".
+ *
+ * English compares whole-word spans of the question; Japanese, which has no spaces, compares
+ * character spans. A span must be as similar to the phrasing as a whole-question fuzzy match
+ * would need to be. The longest phrasing found wins, so the most specific topic is suggested.
+ */
+export function containRoute(normalized: string, entries: ContextEntry[], lang: Lang, cfg: MatchConfig): RouteResult {
+  if (!normalized) return { kind: "none" };
+  const words = lang === "en" ? normalized.split(" ") : null;
+  let best: { e: ContextEntry; score: number } | null = null;
+  for (const e of entries) {
+    const L = e.norm.length;
+    const size = lang === "en" ? e.norm.split(" ").length : L;
+    if (size < cfg.containMin || L >= normalized.length) continue; // too generic, or not shorter than the question
+    const min = Math.ceil(L * 0.8);
+    const max = Math.floor(L * 1.2);
+    let score = 0;
+    if (words) {
+      for (let i = 0; i < words.length; i++) {
+        let span = "";
+        for (let j = i; j < words.length; j++) {
+          span = span ? `${span} ${words[j]}` : words[j];
+          if (span.length > max) break;
+          if (span.length >= min) score = Math.max(score, similarity(span, e.norm));
+        }
+      }
+    } else {
+      for (let i = 0; i + min <= normalized.length; i++) {
+        for (let n = min; n <= max && i + n <= normalized.length; n++) score = Math.max(score, similarity(normalized.slice(i, i + n), e.norm));
+      }
+    }
+    if (score >= cfg.fuzzyThreshold && (!best || L > best.e.norm.length || (L === best.e.norm.length && score > best.score))) best = { e, score };
+  }
+  return best ? { kind: "faq", id: best.e.id, confirm: true, via: "contain", score: best.score } : { kind: "none" };
 }
 
 /* ---------------- Weighted LCS ---------------- */

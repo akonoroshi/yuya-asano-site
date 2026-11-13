@@ -46,7 +46,7 @@ export interface ChatContext {
 }
 
 export type RouteResult =
-  | { kind: "faq"; id: string; confirm: boolean; via: "fuzzy" | "phoneme"; score: number }
+  | { kind: "faq"; id: string; confirm: boolean; via: "social" | "fuzzy" | "contain" | "phoneme"; score: number }
   | { kind: "none" };
 
 /** Events the Worker streams back (server-sent events, one JSON object per event). */

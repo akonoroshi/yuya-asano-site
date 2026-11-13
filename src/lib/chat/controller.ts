@@ -8,7 +8,8 @@
 // home page and the chat opened from the corner character on any other page (same tab only).
 import { ChatApiError, streamChat } from "./api.ts";
 import { parseTags, stripTags, TagStream, type Tag } from "./tags.ts";
-import { routeFuzzy, type RouteInput } from "./route.ts";
+import { routeContain, routeFuzzy, type RouteInput } from "./route.ts";
+import { CaptionPacer } from "./pacer.ts";
 import type { WorkerRequest, WorkerResponse } from "./phoneme.worker.ts";
 import type { ApiErrorCode, ChatContext, ChatMessage, Lang, Link, RouteResult } from "./types.ts";
 
@@ -92,6 +93,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const HISTORY_SENT = 8; // messages sent to the Worker (it enforces its own cap too)
 const PHONEME_TIMEOUT_MS = 2500;
+// Topics after which the visitor keeps the chips they had (see answerFaq).
+const KEEP_CHIPS = new Set(["thanks", "ack"]);
 // A filler on every LLM answer gets old fast: skip it some of the time.
 const FILLER_CHANCE = 0.75;
 
@@ -130,6 +133,8 @@ export class ChatController {
   private nextId = 1;
   /** The LLM request in flight, until its first text arrives (only then can it be retracted). */
   private inflight: { abort: AbortController; question: string; retracted: boolean; filler: boolean } | null = null;
+  /** Shino's voice is on: captions follow the audio (pacer.ts) instead of typing at a fixed speed. */
+  private voiceCaptions = false;
 
   /** page: "home", "work", "publications", or "project:<id>"; picks the starting chips. */
   constructor(lang: Lang, view: ChatView, strings: ChatStrings, page = "home") {
@@ -276,6 +281,10 @@ export class ChatController {
     const fuzzy = routeFuzzy(input, ctx);
     if (fuzzy.kind === "faq") return fuzzy.confirm ? this.confirmFaq(fuzzy.id, text) : this.answerFaq(fuzzy.id, text);
 
+    // Typed, with extra words around a phrasing: suggest it, and let the visitor decide.
+    const contained = routeContain(input, ctx);
+    if (contained.kind === "faq") return this.confirmFaq(contained.id, text);
+
     if (input.source === "voice") {
       this.setBusy(true);
       const phonetic = await this.phonemeRoute(input.alternatives[0]);
@@ -283,6 +292,37 @@ export class ChatController {
       if (phonetic.kind === "faq") return this.confirmFaq(phonetic.id, text);
     }
     return this.askLlm(text, opts.source === "voice" && !!opts.handsFree);
+  }
+
+  /** Call when the Voice setting changes (and once at start). */
+  setVoiceCaptions(on: boolean) {
+    this.voiceCaptions = on;
+  }
+
+  /**
+   * With voice on, a pacer that reveals the caption as the voice player reports each unit
+   * (voice:unit, voice:stopped). Null when voice is off or the visitor prefers reduced motion.
+   */
+  private startPacing(reveal: (pos: number) => void): CaptionPacer | null {
+    if (!this.voiceCaptions || reducedMotion() || typeof window === "undefined" || !window.addEventListener) return null;
+    const pacer = new CaptionPacer(this.lang, reveal);
+    const onUnit = (e: Event) => {
+      const d = (e as CustomEvent<{ text?: string; ms?: number; skipped?: boolean }>).detail ?? {};
+      if (typeof d.text !== "string") return;
+      if (d.skipped) pacer.unitSkipped(d.text);
+      else pacer.unitStarted(d.text, typeof d.ms === "number" ? d.ms : 0);
+    };
+    const onStop = () => pacer.stop();
+    window.addEventListener("voice:unit", onUnit);
+    window.addEventListener("voice:stopped", onStop);
+    // The pacer disposes itself when it's done; an abandoned reply disposes it early.
+    const dispose = pacer.dispose.bind(pacer);
+    pacer.dispose = () => {
+      dispose();
+      window.removeEventListener("voice:unit", onUnit);
+      window.removeEventListener("voice:stopped", onStop);
+    };
+    return pacer;
   }
 
   /**
@@ -408,7 +448,18 @@ export class ChatController {
     const sendUpTo = (pos: number) => {
       while (next < tags.length && tags[next].at <= pos) emitTag(tags[next++]);
     };
-    if (reducedMotion()) {
+    let shown = 0;
+    const pacer = this.startPacing((pos) => {
+      sendUpTo(pos - 1); // tags inside the new text fire just before it appears
+      r.append(text.slice(shown, pos));
+      shown = pos;
+    });
+    if (pacer) {
+      // With voice on, each sentence appears while it's spoken.
+      pacer.update(text, true);
+      await pacer.done;
+      sendUpTo(text.length);
+    } else if (reducedMotion()) {
       sendUpTo(text.length);
       r.append(text);
     } else {
@@ -449,8 +500,9 @@ export class ChatController {
     this.history.push({ role: "user", content: userText }, { role: "assistant", content: stripTags(ans.text) });
     this.log.push({ role: "assistant", text, links: ans.links });
     this.setBusy(false);
-    // Answers outside the tree (greetings, thanks) return to the start chips.
-    this.showChips(ans.chip ? { kind: "topic", id, includeTopic: false } : { kind: "start" });
+    // Thanks and "cool" usually mean "keep going": the visitor keeps the chips they had. Other
+    // answers outside the tree (greetings, farewells, "What can you do?") return to the start chips.
+    this.showChips(ans.chip ? { kind: "topic", id, includeTopic: false } : KEEP_CHIPS.has(id) ? this.chipState : { kind: "start" });
   }
 
   /** "Did you mean …?" asked in the caption, answered with chips. Both choices are free until "Ask what I said". */
@@ -500,13 +552,36 @@ export class ChatController {
       a.hint?.(line);
       emit("chat:filler", { text: line });
     }
+    // With voice on, the caption follows the audio: text waits until its sentence is spoken, and
+    // each tag fires when the caption reaches it. Otherwise text appears as it arrives.
+    const pending: Tag[] = [];
+    let shown = 0;
+    const pacer = this.startPacing((pos) => {
+      while (pending.length && pending[0].at <= pos - 1) emitTag(pending.shift()!);
+      a.append(reply.slice(shown, pos));
+      shown = pos;
+    });
     const write = (chunk: { text: string; tags: Tag[] }) => {
+      if (pacer) {
+        pending.push(...chunk.tags);
+        if (chunk.text) {
+          reply += chunk.text;
+          pacer.update(reply, false);
+        }
+        return;
+      }
       // A tag is sent before the text it precedes, so the character reacts as the text appears.
       chunk.tags.forEach(emitTag);
       if (chunk.text) {
         reply += chunk.text;
         a.append(chunk.text);
       }
+    };
+    /** Shows everything still held back (an error, or the voice stopped). */
+    const showAll = () => {
+      if (!pacer) return;
+      pacer.stop();
+      pending.splice(0).forEach(emitTag);
     };
     try {
       for await (const ev of streamChat({ lang: this.lang, messages: this.history.slice(-HISTORY_SENT) }, inflight.abort.signal)) {
@@ -524,17 +599,28 @@ export class ChatController {
         else if (ev.type === "error") {
           failed = true;
           errorText = this.strings.errors[ev.code === "interrupted" ? "interrupted" : "unavailable"];
+          showAll();
           a.fail(errorText);
           emit("chat:reply-error", { text: errorText });
         }
       }
       if (inflight.retracted) throw new Retracted();
       write(tags.flush());
+      if (pacer) {
+        pacer.update(reply, true);
+        await pacer.done; // the caption finishes with the voice
+        pending.splice(0).forEach(emitTag);
+      }
       if (!failed) a.finish({ sources });
     } catch (e) {
-      if (inflight.retracted) return this.finishRetracted(inflight);
+      if (inflight.retracted) {
+        pacer?.dispose();
+        return this.finishRetracted(inflight);
+      }
       failed = true;
       errorText = this.strings.errors[e instanceof ChatApiError ? e.code : "unavailable"];
+      showAll();
+      if (pacer) pacer.update(reply, true);
       a.fail(errorText);
       emit("chat:reply-error", { text: errorText });
     } finally {

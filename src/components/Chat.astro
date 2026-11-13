@@ -91,6 +91,7 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
   import { canRecognizeLocally, Listener, speechSupported, type ListenError } from "../lib/chat/asr.ts";
   import { ConversationListener } from "../lib/chat/conversation.ts";
   import { ChatController, type ChatStrings, type Chip, type ReplyView } from "../lib/chat/controller.ts";
+  import { PlaybackEcho } from "../lib/chat/playback-echo.ts";
   import { parseConfirm, prependToAlternatives } from "../lib/chat/turn.ts";
   import { VoicePlayer } from "../lib/chat/voice.ts";
   import type { Lang, Link } from "../lib/chat/types.ts";
@@ -337,7 +338,11 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     const stage = root.closest("[data-chat-stage]") ?? document;
     const player = new VoicePlayer(lang);
     const voiceBtn = stage.querySelector<HTMLButtonElement>("[data-chat-voice-toggle]");
-    const syncVoiceBtn = () => voiceBtn?.setAttribute("aria-pressed", String(player.enabled));
+    const syncVoiceBtn = () => {
+      voiceBtn?.setAttribute("aria-pressed", String(player.enabled));
+      controller.setVoiceCaptions(player.enabled); // with voice on, captions follow the audio
+    };
+    syncVoiceBtn();
     if (voiceBtn) {
       voiceBtn.hidden = false;
       syncVoiceBtn();
@@ -523,9 +528,11 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
       let queued: string[] | null = null; // a turn finished while Shino was still answering
       // True while Shino's voice is on: then she "speaks" only while audio plays.
       let voicePlayer = player.enabled;
+      let voiceSpeaking = false;
+      const playback = new PlaybackEcho(lang);
       window.addEventListener("character:voice-state", (e) => {
         voicePlayer = !!(e as CustomEvent<{ enabled: boolean }>).detail?.enabled;
-        conv?.setSpeaking(!voicePlayer && controller.isBusy());
+        conv?.setSpeaking(voiceSpeaking || (!voicePlayer && controller.isBusy()), voiceSpeaking);
       });
 
       // Live words go in the "You asked" line, so the input stays free for typing.
@@ -567,9 +574,18 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
       window.addEventListener("chat:reply-end", () => !voicePlayer && conv?.setSpeaking(false));
       window.addEventListener("character:speech-start", () => {
         voicePlayer = true;
-        conv?.setSpeaking(true);
+        voiceSpeaking = true;
+        conv?.setSpeaking(true, true);
       });
-      window.addEventListener("character:speech-end", () => conv?.setSpeaking(false));
+      window.addEventListener("voice:unit", (e) => {
+        const { text, ms, skipped } = (e as CustomEvent<{ text: string; ms: number; skipped?: boolean }>).detail;
+        if (!skipped) playback.start(text, ms, performance.now());
+      });
+      window.addEventListener("character:speech-end", () => {
+        voiceSpeaking = false;
+        playback.end(performance.now());
+        conv?.setSpeaking(false);
+      });
 
       async function startConversation() {
         warm();
@@ -609,12 +625,12 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
             else if (reason === "idle") setStatus(s.idleStopped);
             else setStatus(transcribeNote);
           },
-        });
+        }, playback);
         conv = listener;
         try {
           await listener.start();
           if (listener.isActive) {
-            listener.setSpeaking(!voicePlayer && controller.isBusy());
+            listener.setSpeaking(voiceSpeaking || (!voicePlayer && controller.isBusy()), voiceSpeaking);
             setStatus(s.listeningNote);
           }
         } catch (e) {

@@ -14,6 +14,9 @@
 //   character:speech-start  { analyser }  her voice starts; read the AnalyserNode for lip sync
 //   character:speech-end                  it ended, or was stopped (barge-in, a new reply, closing)
 //   character:voice-state   { enabled }   the Voice setting changed
+//   voice:unit              { text, ms }  a unit's audio starts and lasts ms; ms is 0 and
+//                                         skipped true when it has no audio (the caption pacer)
+//   voice:stopped                         stopped before the end (barge-in, Voice off, closing)
 import { speechKey, speechUnits } from "./speech.ts";
 import type { Lang } from "./types.ts";
 
@@ -28,6 +31,7 @@ interface VoiceManifest {
 }
 
 interface Segment {
+  text: string;
   buffer: Promise<AudioBuffer | null>;
 }
 
@@ -153,9 +157,9 @@ export class VoicePlayer {
 
   /* ---------- Building the queue ---------- */
 
-  /** A new reply: whatever was playing stops. */
+  /** A new reply: whatever was playing stops (quietly: this isn't the visitor stopping her). */
   private begin() {
-    this.stop();
+    this.halt();
     this.open = true;
     this.spoke = true;
   }
@@ -172,8 +176,8 @@ export class VoicePlayer {
     wake?.();
   }
 
-  private push(buffer: Promise<AudioBuffer | null>) {
-    this.queue.push({ buffer });
+  private push(text: string, buffer: Promise<AudioBuffer | null>) {
+    this.queue.push({ text, buffer });
     this.notify();
     if (!this.playing) {
       this.playing = true;
@@ -182,12 +186,13 @@ export class VoicePlayer {
   }
 
   private addText(text: string) {
-    for (const unit of speechUnits(this.lang, text)) this.push(this.clip(unit));
+    for (const unit of speechUnits(this.lang, text)) this.push(unit, this.clip(unit));
   }
 
   private addLive(unit: string, exp: number, sig: string) {
     const gen = this.gen;
     this.push(
+      unit,
       this.clip(unit).then((clip) => {
         if (clip || this.liveOff || gen !== this.gen) return clip;
         return this.live(unit, exp, sig);
@@ -252,8 +257,11 @@ export class VoicePlayer {
       }
       const buffer = await seg.buffer;
       if (gen !== this.gen) return;
-      if (!buffer) continue;
-      if (!(await this.play(buffer, gen))) return;
+      if (!buffer) {
+        emit("voice:unit", { text: seg.text, ms: 0, skipped: true });
+        continue;
+      }
+      if (!(await this.play(seg.text, buffer, gen))) return;
       if (gen === this.gen && (this.queue.length || this.open)) await sleep(GAP_MS);
     }
     if (gen === this.gen) {
@@ -263,7 +271,7 @@ export class VoicePlayer {
   }
 
   /** Plays one buffer to the end. Returns false if audio isn't allowed yet (no gesture). */
-  private async play(buffer: AudioBuffer, gen: number): Promise<boolean> {
+  private async play(text: string, buffer: AudioBuffer, gen: number): Promise<boolean> {
     const ctx = this.context();
     if (ctx.state !== "running") await ctx.resume().catch(() => {});
     if (ctx.state !== "running" || gen !== this.gen) {
@@ -281,13 +289,20 @@ export class VoicePlayer {
     await new Promise<void>((resolve) => {
       src.onended = () => resolve();
       src.start();
+      emit("voice:unit", { text, ms: buffer.duration * 1000 });
     });
     if (this.source === src) this.source = null;
     return true;
   }
 
-  /** Stops speaking and drops everything queued. */
+  /** Stops speaking and drops everything queued; the caption shows the rest at once. */
   stop() {
+    const active = this.open || this.playing || this.queue.length > 0;
+    this.halt();
+    if (active) emit("voice:stopped");
+  }
+
+  private halt() {
     this.gen++;
     this.queue = [];
     this.open = false;
