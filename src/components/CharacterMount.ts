@@ -73,11 +73,10 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
       audioLevel.current = 0;
       setSpeaking(false);
     };
-    // An open microphone keeps the desk-rest pose. Listening nods (voice:nod) and spoken
-    // backchannels (voice:backchannel) both cue the library's listening nod: listen_learn has a
-    // dedicated head nod of listeningNodDeg (5°), where ack is a 2° tilt that's barely visible.
-    // Priority 40 is the library's default for backchannels, below her own speech gestures.
-    const onBackchannel = () => motion.event("listen_learn", 0.6, 40, "backchannel", "conversation", performance.now() / 1000);
+    const onListening = (event: Event) => {
+      setListening(Boolean((event as CustomEvent<{ on?: boolean }>).detail?.on));
+    };
+    const onBackchannel = () => motion.event("ack", 0.45, 50, "backchannel", "conversation", performance.now() / 1000);
     const handlers: Record<(typeof characterEvents)[number], (event: Event) => void> = {
       "chat:open": onOpen,
       "chat:close": onClose,
