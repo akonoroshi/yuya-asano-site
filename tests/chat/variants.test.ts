@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeText } from "../../src/lib/chat/normalize.ts";
-import { framedVariants, thirdPersonVariants } from "../../src/lib/chat/variants.ts";
+import { framedVariants, nameForms, thirdPersonVariants } from "../../src/lib/chat/variants.ts";
 
 test("variants: 'he' and 'Yuya' versions, with verb agreement", () => {
   assert.deepEqual(thirdPersonVariants("What did you do at ETS?"), ["What did he do at ETS?", "What did Yuya do at ETS?"]);
@@ -46,4 +46,11 @@ test("frames: labels that are already a frame get none", () => {
   assert.deepEqual(framedVariants("About Yuya", "en"), []);
   assert.deepEqual(framedVariants("How this chat works", "en"), []);
   assert.deepEqual(framedVariants("浅野について", "ja"), []);
+});
+
+test("names: 'his' names also get 'Yuya's' and 'your'; others stay as they are", () => {
+  assert.deepEqual(nameForms("his research", "en"), ["his research", "Yuya's research", "your research"]);
+  assert.deepEqual(nameForms("Emma", "en"), ["Emma"]);
+  assert.deepEqual(nameForms("研究", "ja"), ["研究"]);
+  assert.ok(framedVariants("his research", "en").includes("Tell me about his research"));
 });

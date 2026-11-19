@@ -70,3 +70,11 @@ export function framedVariants(label: string, lang: "en" | "ja"): string[] {
   return FRAMES[lang].map((f) => f(mid));
 }
 
+/** A topic name and, for English names starting with "his", its "Yuya's" and "your" versions. */
+export function nameForms(name: string, lang: "en" | "ja"): string[] {
+  const n = name.trim();
+  if (lang === "ja" || !/^his\s/i.test(n)) return n ? [n] : [];
+  const rest = n.replace(/^his\s+/i, "");
+  return [n, `Yuya's ${rest}`, `your ${rest}`];
+}
+

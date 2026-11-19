@@ -10,7 +10,7 @@ import path from "node:path";
 import { fail, kuromojiDir, loadTokenizer, outDir, root } from "./lib.mjs";
 
 const { faq, startChips, pageChips, shinoTopics } = await import("../../src/data/chat/faq.ts");
-const { framedVariants, thirdPersonVariants } = await import("../../src/lib/chat/variants.ts");
+const { framedVariants, nameForms, thirdPersonVariants } = await import("../../src/lib/chat/variants.ts");
 const { terms } = await import("../../src/data/chat/terms.ts");
 const { normalizeText } = await import("../../src/lib/chat/normalize.ts");
 const { parseTags } = await import("../../src/lib/chat/tags.ts");
@@ -138,9 +138,16 @@ for (const lang of ["en", "ja"]) {
       const mineToShino = new Set(toShino(e));
       for (const { text } of [...mine]) if (!mineToShino.has(text)) for (const v of thirdPersonVariants(text)) mine.push({ text: v, variant: true });
     }
-    // The chip label in common frames ("Tell me about …", 「…について教えてください」), both languages.
+    // The chip label and the topic's names in common frames ("Tell me about his research",
+    // 「研究について教えてください」), both languages. A name is also a phrasing on its own.
     if (e.chip?.[lang]) for (const v of framedVariants(e.chip[lang], lang)) mine.push({ text: v, variant: true });
-    for (const { text, variant } of mine) {
+    for (const name of e.names?.[lang] ?? []) {
+      for (const form of nameForms(name, lang)) {
+        mine.push({ text: form, variant: true, name: true });
+        for (const v of framedVariants(form, lang)) mine.push({ text: v, variant: true });
+      }
+    }
+    for (const { text, variant, name } of mine) {
       const norm = normalizeText(text, lang);
       if (!norm || seen.has(norm)) continue;
       if (variant && owner.has(norm) && owner.get(norm) !== e.id) {
@@ -155,7 +162,7 @@ for (const lang of ["en", "ja"]) {
       const { ph, oov } = phonemize(text);
       if (lang === "en") for (const w of oov) if (!enOov.has(w)) enOov.set(w, text);
       if (lang === "ja" && !ph) console.warn(`! ja: no phonemes for "${text}"`);
-      entries.push({ id: e.id, text, norm, ph });
+      entries.push({ id: e.id, text, norm, ph, ...(name ? { name: true } : {}) });
     }
     answers[e.id] = {
       canonical: e.questions[lang][0],

@@ -30,6 +30,11 @@ export interface FaqEntry {
   /** Subtopics, in chip order. A topic can be listed under at most two parents. */
   children?: string[];
   questions: { en: string[]; ja: string[] };
+  /** What visitors call this topic when they name it ("his research", 「研究」), besides the chip
+   *  label. Each becomes a phrasing on its own and in common frames ("Tell me about his research",
+   *  「研究について教えてください」; variants.ts). English names starting with "his" also get
+   *  "Yuya's" and "your" versions. Only names that clearly mean this topic. */
+  names?: { en?: string[]; ja?: string[] };
   /** Questions asked of Shino herself, where "you" means her ("How do you work?"). Matched like
    *  the questions, but never turned into "he"/"Yuya" versions (see variants.ts). */
   toShino?: { en: string[]; ja: string[] };
@@ -68,6 +73,7 @@ export const faq: FaqEntry[] = [
     id: "about",
     chip: { en: "About Yuya", ja: "浅野について" },
     children: ["research", "dissertation", "companion", "roles"],
+    names: { en: ["Yuya", "him", "Yuya Asano"], ja: ["浅野", "浅野さん"] },
     questions: {
       en: ["Tell me about Yuya", "Who is Yuya Asano?", "Introduce Yuya", "Give me a quick intro"],
       ja: ["浅野さんについて教えて", "浅野さんはどんな人ですか", "自己紹介してください", "簡単に紹介してください"],
@@ -82,6 +88,7 @@ export const faq: FaqEntry[] = [
     id: "highlights",
     chip: { en: "Research highlights", ja: "研究の成果" },
     children: ["emma", "pairs", "asr", "emnlp"],
+    names: { en: ["his research highlights", "his best work", "his main results", "his publications", "his papers"], ja: ["研究の成果", "主な成果", "論文"] },
     questions: {
       en: ["What are your research highlights?", "What are your main achievements?", "What have you accomplished?", "What are your publications?"],
       ja: ["研究の成果を教えて", "主な実績は何ですか", "これまでに何を達成しましたか", "どんな論文がありますか"],
@@ -97,6 +104,7 @@ export const faq: FaqEntry[] = [
     chip: { en: "Experience & skills", ja: "経験とスキル" },
     // Up to four chips show at a time; the rest appear as these are answered, in this order.
     children: ["sigiq", "ets", "llm-experience", "skills", "production", "jsu"],
+    names: { en: ["his experience", "his work experience", "his internships", "his industry experience"], ja: ["経験", "職歴", "インターン経験", "インターン"] },
     questions: {
       en: ["What experience do you have?", "Tell me about your experience", "What are your experience and skills?", "What is your work experience?", "Where have you interned?", "Do you have industry experience?", "Where have you worked?", "Internships"],
       ja: ["経験を教えてください", "どんな経験がありますか", "職歴を教えて", "経験とスキルを教えてください", "どこでインターンをしましたか", "職務経験を教えて", "企業での経験はありますか", "どこで働いたことがありますか", "インターン経験"],
@@ -109,6 +117,7 @@ export const faq: FaqEntry[] = [
   {
     id: "ets",
     chip: { en: "ETS internship", ja: "ETSでのインターン" },
+    names: { en: ["ETS", "his ETS internship", "the ETS internship", "his time at ETS", "his work at ETS", "Educational Testing Service"], ja: ["ETS", "ETSでのインターン", "ETSでの仕事"] },
     questions: {
       en: ["What did you do at ETS?", "Tell me about your ETS internship", "What did you work on at Educational Testing Service?"],
       ja: ["ETSでは何をしましたか", "ETSでのインターンについて教えて", "Educational Testing Serviceでは何に取り組みましたか"],
@@ -121,6 +130,7 @@ export const faq: FaqEntry[] = [
   {
     id: "jsu",
     chip: { en: "Jackson State internship", ja: "ジャクソン州立大学" },
+    names: { en: ["Jackson State", "his Jackson State internship", "his work at Jackson State"], ja: ["ジャクソン州立大学", "ジャクソン州立大学でのインターン"] },
     questions: {
       en: ["What did you do at Jackson State?", "Tell me about your Jackson State University internship"],
       ja: ["ジャクソン州立大学では何をしましたか", "ジャクソン州立大学でのインターンについて教えて"],
@@ -133,6 +143,7 @@ export const faq: FaqEntry[] = [
   {
     id: "research",
     chip: { en: "Research interests", ja: "研究テーマ" },
+    names: { en: ["his research", "his research interests", "his research topic"], ja: ["研究", "研究テーマ", "研究内容"] },
     questions: {
       en: ["What are your research interests?", "What do you research?", "What is your research about?", "What do you work on?"],
       ja: ["研究テーマは何ですか", "どんな研究をしていますか", "研究内容を教えてください", "何を研究していますか"],
@@ -146,6 +157,7 @@ export const faq: FaqEntry[] = [
     id: "chat-how",
     chip: { en: "How this chat works", ja: "このチャットの仕組み" },
     children: ["asr", "chat-cost", "chat-stack", "privacy"],
+    names: { en: ["this chat", "this chatbot", "the chatbot"], ja: ["このチャット", "このチャットボット"] },
     questions: {
       en: ["How does this chat work?", "How is this AI implemented?", "How did you build this chatbot?", "Is this ChatGPT?"],
       ja: ["このチャットはどういう仕組みですか", "このAIはどう実装されていますか", "このチャットボットはどう作りましたか", "これはChatGPTですか"],
@@ -162,6 +174,7 @@ export const faq: FaqEntry[] = [
   {
     // Not a chip: How this chat works -> Speech recognition correction covers it. Still answers typed questions.
     id: "chat-voice",
+    names: { en: ["voice input"], ja: ["音声入力"] },
     questions: {
       en: ["How does voice input work?", "How do you handle speech recognition errors?", "Can I talk to you?"],
       ja: ["音声入力はどういう仕組みですか", "音声認識の誤りにはどう対応していますか", "話しかけてもいいですか"],
@@ -194,6 +207,7 @@ export const faq: FaqEntry[] = [
   {
     id: "chat-stack",
     chip: { en: "Tech stack", ja: "技術スタック" },
+    names: { en: ["the tech stack", "the tech stack of this site"], ja: ["このサイトの技術スタック"] },
     questions: {
       en: ["What is the tech stack?", "What did you use to build this site?", "Which model do you use?"],
       ja: ["技術スタックは何ですか", "このサイトは何で作られていますか", "どのモデルを使っていますか"],
@@ -210,6 +224,7 @@ export const faq: FaqEntry[] = [
   {
     id: "dissertation",
     chip: { en: "Dissertation in 30 seconds", ja: "博士研究を30秒で" },
+    names: { en: ["his dissertation", "his thesis", "his PhD research", "his PhD"], ja: ["博士論文", "博士研究"] },
     questions: {
       en: ["Explain your dissertation in 30 seconds", "What is your dissertation about?", "What is your PhD about?"],
       ja: ["博士研究を30秒で説明して", "博士論文のテーマは何ですか", "博士課程では何をしていますか"],
@@ -223,6 +238,7 @@ export const faq: FaqEntry[] = [
   {
     id: "sigiq",
     chip: { en: "SigIQ internship", ja: "SigIQでのインターン" },
+    names: { en: ["SigIQ", "SigIQ.ai", "his SigIQ internship", "his work at SigIQ"], ja: ["SigIQ", "SigIQでのインターン", "SigIQでの仕事"] },
     questions: {
       en: ["What did you build at SigIQ?", "What did you do at SigIQ?", "Tell me about your SigIQ internship"],
       ja: ["SigIQでは何を作りましたか？", "SigIQでは何をしていましたか", "SigIQでのインターンについて教えて"],
@@ -249,6 +265,7 @@ export const faq: FaqEntry[] = [
     id: "roles",
     chip: { en: "Job search", ja: "仕事探し" },
     children: ["visa", "contact"],
+    names: { en: ["his job search", "his job hunt"], ja: ["仕事探し", "就職活動"] },
     questions: {
       en: ["Are you open to roles?", "Are you looking for a job?", "When do you graduate?", "What kind of roles are you looking for?"],
       ja: ["求職中ですか？", "仕事を探していますか", "いつ卒業しますか", "どんな職種を希望していますか"],
@@ -276,6 +293,7 @@ export const faq: FaqEntry[] = [
     id: "asr",
     chip: { en: "Speech recognition correction", ja: "音声認識の誤り訂正" },
     children: ["asr-rerank", "asr-sound", "asr-users"],
+    names: { en: ["the Alexa Prize", "his Alexa Prize project", "speech recognition correction"], ja: ["Alexa Prize", "音声認識の誤り訂正"] },
     questions: {
       en: ["What was your Alexa Prize project?", "Tell me about your speech recognition work", "What is your ASR correction paper about?"],
       ja: ["Alexa Prizeでは何をしましたか", "音声認識の研究について教えて", "ASR訂正の論文は何についてですか"],
@@ -290,6 +308,7 @@ export const faq: FaqEntry[] = [
     id: "emnlp",
     chip: { en: "LLMs vs. students", ja: "LLMと生徒の解き方" },
     children: ["emnlp-why", "emnlp-method"],
+    names: { en: ["his EMNLP paper", "the EMNLP paper", "his EMNLP 2025 paper"], ja: ["EMNLPの論文"] },
     questions: {
       en: ["What is your EMNLP 2025 paper about?", "Can LLMs simulate student solutions?", "Tell me about your EMNLP paper"],
       ja: ["EMNLP 2025の論文は何についてですか", "LLMは学習者の解答を再現できますか", "EMNLPの論文について教えて"],
@@ -304,6 +323,7 @@ export const faq: FaqEntry[] = [
     id: "companion",
     chip: { en: "AI learning companion", ja: "AI学習コンパニオン" },
     children: ["companion-teach", "companion-ik"],
+    names: { en: ["the learning companion", "the AI learning companion", "his learning companion"], ja: ["学習コンパニオン", "AI学習コンパニオン"] },
     questions: {
       en: ["What is the AI learning companion?", "Tell me about your learning companion project", "What are you building now?"],
       ja: ["AI学習コンパニオンとは何ですか", "3Dキャラクターのプロジェクトについて教えて", "今は何を作っていますか"],
@@ -318,6 +338,7 @@ export const faq: FaqEntry[] = [
     id: "emma",
     chip: { en: "Emma, an LLM agent", ja: "Emma：LLMエージェント" },
     children: ["emma-llm", "emma-why", "emma-hard", "emma-study"],
+    names: { en: ["Emma", "the Emma project"], ja: ["Emma", "エマ"] },
     questions: {
       en: ["Tell me about Emma", "What is Emma?", "What is the LLM version of Emma?"],
       ja: ["Emmaについて教えて", "Emmaとは何ですか", "LLM版のEmmaとは何ですか"],
@@ -356,6 +377,7 @@ export const faq: FaqEntry[] = [
   {
     id: "emma-study",
     chip: { en: "The 72-person study", ja: "72名の実験" },
+    names: { en: ["the Emma study", "the 72-person study"], ja: ["Emmaの実験", "72名の実験"] },
     questions: {
       en: ["Tell me about the Emma study", "How is Emma being evaluated?", "Who built the study infrastructure?"],
       ja: ["Emmaの実験について教えて", "Emmaはどう評価されていますか", "実験の基盤は誰が作りましたか"],
@@ -369,6 +391,7 @@ export const faq: FaqEntry[] = [
     id: "pairs",
     chip: { en: "Pairs teaching Emma", ja: "2人で教える研究" },
     children: ["pairs-lexical", "pairs-conflict", "pairs-data"],
+    names: { en: ["the pairs study"], ja: ["ペアの研究"] },
     questions: {
       en: ["How do pairs of students teach a robot?", "Tell me about the pairs study", "What did you find when two students taught Emma together?"],
       ja: ["ペアの生徒はロボットにどう教えるのですか", "ペアの研究について教えて", "2人でEmmaに教える研究では何がわかりましたか"],
@@ -382,6 +405,7 @@ export const faq: FaqEntry[] = [
   {
     id: "pairs-lexical",
     chip: { en: "Whose words they share", ja: "語彙的同調" },
+    names: { en: ["lexical alignment"], ja: ["語彙的同調"] },
     questions: {
       en: ["What is lexical alignment?", "What did you find about lexical alignment?", "Tell me about your AIED 2025 paper"],
       ja: ["語彙的同調とは何ですか", "語彙的同調について何がわかりましたか", "AIED 2025の論文について教えて"],
@@ -503,6 +527,7 @@ export const faq: FaqEntry[] = [
   {
     id: "contact",
     chip: { en: "Contact & CV", ja: "連絡先とCV" },
+    names: { en: ["his contact info", "his contact information", "his CV", "his resume", "his email"], ja: ["連絡先", "CV", "履歴書"] },
     questions: {
       en: ["How can I contact Yuya?", "What is your email?", "How do I get in touch?"],
       ja: ["連絡先を教えてください", "メールアドレスは何ですか", "どうやって連絡すればいいですか"],
@@ -516,6 +541,7 @@ export const faq: FaqEntry[] = [
   {
     id: "visa",
     chip: { en: "Visa sponsorship", ja: "ビザのスポンサー" },
+    names: { en: ["his visa status", "visa sponsorship"], ja: ["ビザ"] },
     questions: {
       en: ["Do you need visa sponsorship?", "Will you need sponsorship?", "Are you authorized to work in the US?", "What is your visa status?", "Do you require sponsorship?"],
       ja: ["ビザのスポンサーは必要ですか", "就労ビザのサポートは必要ですか", "アメリカで働く資格はありますか", "ビザのステータスは何ですか"],
@@ -527,6 +553,7 @@ export const faq: FaqEntry[] = [
   },
   {
     id: "location",
+    names: { en: ["his location"], ja: ["勤務地"] },
     questions: {
       en: ["Where are you located?", "Where do you want to work?", "Are you open to relocation?", "Are you willing to relocate?", "Do you want to work remotely?", "Are you open to remote work?"],
       ja: ["どこに住んでいますか", "どこで働きたいですか", "引っ越しは可能ですか", "リモートで働けますか", "勤務地の希望はありますか"],
@@ -550,6 +577,7 @@ export const faq: FaqEntry[] = [
   },
   {
     id: "advisor",
+    names: { en: ["his advisor"], ja: ["指導教員"] },
     questions: {
       en: ["Who is your advisor?", "Who is your PhD advisor?", "Who do you work with at Pitt?", "Who supervises your research?"],
       ja: ["指導教員は誰ですか", "博士課程の指導教員は誰ですか", "誰の研究室にいますか"],
@@ -562,6 +590,7 @@ export const faq: FaqEntry[] = [
   {
     id: "skills",
     chip: { en: "Technical skills", ja: "技術スキル" },
+    names: { en: ["his skills", "his technical skills", "his tech stack"], ja: ["スキル", "技術スキル"] },
     questions: {
       en: ["What are your technical skills?", "What programming languages do you use?", "What tools and frameworks do you use?", "Do you know PyTorch?"],
       ja: ["技術スキルを教えて", "どのプログラミング言語を使いますか", "どんなツールやフレームワークを使いますか", "PyTorchは使えますか"],
@@ -575,6 +604,7 @@ export const faq: FaqEntry[] = [
   {
     id: "llm-experience",
     chip: { en: "LLM experience", ja: "LLMの経験" },
+    names: { en: ["his LLM experience", "his experience with LLMs"], ja: ["LLMの経験"] },
     questions: {
       en: ["Have you worked with LLMs?", "What is your LLM experience?", "Have you built LLM agents?", "Do you have RAG experience?", "Have you worked with retrieval-augmented generation?"],
       ja: ["LLMの経験はありますか", "LLMエージェントを作ったことはありますか", "RAGの経験はありますか"],
@@ -587,6 +617,7 @@ export const faq: FaqEntry[] = [
   {
     id: "production",
     chip: { en: "Shipped to users", ja: "実運用の経験" },
+    names: { en: ["his production experience"], ja: ["実運用の経験"] },
     questions: {
       en: ["Do you have production experience?", "Have you shipped anything?", "Has your work been deployed?", "Have you built anything real users use?"],
       ja: ["本番環境での経験はありますか", "製品として提供したものはありますか", "実際に使われたシステムはありますか"],

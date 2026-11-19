@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   combineSegments,
-  completeness,
   endOfTurnDelay,
   isBackchannel,
   isBargeIn,
@@ -70,29 +69,17 @@ test("levelDb", () => {
   assert.equal(Math.round(levelDb(full)), 0);
 });
 
-test("completeness: English goes by the last word and question shape", () => {
-  assert.equal(completeness("tell me about his research and", "en"), "continuing");
-  assert.equal(completeness("um", "en"), "continuing");
-  assert.equal(completeness("what is his dissertation about", "en"), "continuing"); // ends in "about"
-  assert.equal(completeness("what is his dissertation", "en"), "complete");
-  assert.equal(completeness("is he open to roles?", "en"), "complete");
-  assert.equal(completeness("Emma", "en"), "unknown");
-});
-
-test("completeness: Japanese goes by the ending", () => {
-  assert.equal(completeness("浅野の研究について教えてください", "ja"), "complete");
-  assert.equal(completeness("エマはどう答えるんですか", "ja"), "complete");
-  assert.equal(completeness("インターンのことなんですけど", "ja"), "continuing");
-  assert.equal(completeness("えーと", "ja"), "continuing");
-  assert.equal(completeness("ETSでのインターンで", "ja"), "continuing");
-});
-
-test("end-of-turn delay: short when finished, long mid-phrase, longest with no words", () => {
-  const c = TURN_CONFIG.endOfTurn;
-  assert.equal(endOfTurnDelay("what is his dissertation", "en"), c.completeMs);
-  assert.equal(endOfTurnDelay("tell me about the", "en"), c.continuingMs);
-  assert.equal(endOfTurnDelay("Emma", "en"), c.defaultMs);
-  assert.equal(endOfTurnDelay("", "en"), c.noTextMs);
+test("end-of-turn delay is longer for continuation cues and when no words arrived", () => {
+  assert.equal(endOfTurnDelay("what is his dissertation about", "en"), 600);
+  assert.equal(endOfTurnDelay("Emma", "en"), 600);
+  assert.equal(endOfTurnDelay("tell me about the", "en"), 1200);
+  assert.equal(endOfTurnDelay("tell me about his research and", "en"), 1200);
+  assert.equal(endOfTurnDelay("エマはどう答えるんですか", "ja"), 600);
+  assert.equal(endOfTurnDelay("浅野の研究について教えて", "ja"), 600);
+  assert.equal(endOfTurnDelay("インターンのことなんですけど", "ja"), 1200);
+  assert.equal(endOfTurnDelay("えーと", "ja"), 1200);
+  assert.equal(endOfTurnDelay("ETSでのインターンで", "ja"), 1200);
+  assert.equal(endOfTurnDelay("", "en"), 2500);
 });
 
 test("backchannels and hesitations", () => {

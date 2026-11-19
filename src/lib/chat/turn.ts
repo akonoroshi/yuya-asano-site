@@ -22,11 +22,10 @@ export const TURN_CONFIG = {
     minFloorDb: -80,
   },
   endOfTurn: {
-    completeMs: 600, // silence that ends a turn that sounds finished ("…is he open to roles")
-    defaultMs: 900,
-    continuingMs: 1400, // silence that ends a turn ending mid-phrase ("…and", 「…けど」)
+    defaultMs: 600,
+    continuingMs: 1200, // give clear continuation cues more time ("…and", 「…けど」)
     noTextMs: 2500, // voice was heard but the recognizer has no words yet
-    finalGraceMs: 500, // after the silence, wait this long for the recognizer's final result
+    stableTextMs: 200, // interim words must be unchanged this long, counted alongside silence
   },
   bargeIn: {
     minSpeechMs: 500, // speech over Shino this long is an interruption…
@@ -71,6 +70,13 @@ export class VadTracker {
   constructor(cfg = TURN_CONFIG.vad) {
     this.cfg = cfg;
     this.floor = cfg.floorStartDb;
+  }
+
+  resetSpeech() {
+    this.speaking = false;
+    this.speechStartedAt = 0;
+    this.lastLoudAt = -Infinity;
+    this.aboveSince = null;
   }
 
   push(db: number, now: number): VadEvent[] {
@@ -118,14 +124,12 @@ export function levelDb(samples: Float32Array): number {
   return rms > 0 ? Math.max(-100, 20 * Math.log10(rms)) : -100;
 }
 
-/* ---------- Does the transcript sound finished? ---------- */
+/* ---------- How much silence ends a turn? ---------- */
 
 // Web Speech results rarely have punctuation, so this goes by the last word.
 const EN_CONTINUING = new Set(
-  ("and but or so because cause since if when while though although that which who whose whom " +
-    "the a an to of in on at for with about from into like as than then " +
-    "my your his her their our its is are was were be been am do does did can could would should will " +
-    "um uh er erm hmm mm well also plus maybe what's how's").split(" "),
+  ("and but or because although if unless the a an my your his her their our its " +
+    "um uh er erm hmm mm").split(" "),
 );
 // Japanese turns that end like this are usually going on: conjunctive particles, て/で forms,
 // hesitations, and "the …" demonstratives.
@@ -134,38 +138,18 @@ const JA_CONTINUING = [
   "し", "て", "で", "と", "が", "を", "に", "は", "も", "の",
   "えーと", "えっと", "えー", "あの", "あのー", "その", "そのー", "まあ", "なんか",
 ];
-// …and these usually close a question or request.
-const JA_COMPLETE = ["か", "ですか", "ますか", "でしょうか", "ください", "教えて", "おしえて", "ですね", "ますね", "たい", "です", "ます", "の？", "？", "?"];
-const EN_QUESTION_START = /^(what|who|where|when|why|how|which|is|are|does|do|did|can|could|would|will|has|have|tell)\b/;
-
-export type Completeness = "complete" | "continuing" | "unknown";
-
-export function completeness(text: string, lang: Lang): Completeness {
-  const t = text.trim();
-  if (!t) return "unknown";
-  if (lang === "ja") {
-    const s = t.replace(/[\s。．.、,！!]+$/u, "");
-    // Longest match first, so 「ですか」 wins over 「か」 and 「けど」 over 「ど」.
-    const ends = (list: string[]) => list.some((w) => s.endsWith(w));
-    if (/[？?]$/u.test(t) || ends(JA_COMPLETE.filter((w) => w.length > 1))) return "complete";
-    if (ends(JA_CONTINUING)) return "continuing";
-    if (s.endsWith("か")) return "complete";
-    return "unknown";
-  }
-  if (/[?.!]$/.test(t)) return "complete";
-  const words = t.toLowerCase().replace(/[^\p{L}\p{N}' ]+/gu, " ").trim().split(/\s+/);
-  const last = words[words.length - 1] ?? "";
-  if (EN_CONTINUING.has(last)) return "continuing";
-  // "what is his dissertation about" is finished; a lone "so" or "Emma" may not be.
-  if (words.length >= 3 && EN_QUESTION_START.test(words[0])) return "complete";
-  return "unknown";
-}
-
 /** How much silence ends the turn, given what the recognizer has heard so far. */
 export function endOfTurnDelay(text: string, lang: Lang, cfg = TURN_CONFIG.endOfTurn): number {
-  if (!text.trim()) return cfg.noTextMs;
-  const c = completeness(text, lang);
-  return c === "complete" ? cfg.completeMs : c === "continuing" ? cfg.continuingMs : cfg.defaultMs;
+  const t = text.trim();
+  if (!t) return cfg.noTextMs;
+  if (lang === "ja") {
+    const s = t.replace(/[\s。．.、,！!]+$/u, "");
+    // 「教えて」 can stand as a request even though it ends in て.
+    if (/(?:教えて|おしえて|[？?])$/u.test(s)) return cfg.defaultMs;
+    return JA_CONTINUING.some((ending) => s.endsWith(ending)) ? cfg.continuingMs : cfg.defaultMs;
+  }
+  const last = t.toLowerCase().match(/([\p{L}\p{N}']+)[^\p{L}\p{N}']*$/u)?.[1];
+  return last && EN_CONTINUING.has(last) ? cfg.continuingMs : cfg.defaultMs;
 }
 
 /* ---------- Backchannels and interruptions ---------- */

@@ -84,3 +84,8 @@ none	typed	しのという名前の由来は何ですか
 # リストにない言い方：包含で提案
 research	typed	研究テーマについて説明してください
 visa	typed	ビザのスポンサーの話を聞かせてください
+# 話題の呼び方（faq.ts の names）
+research	typed	浅野さんの研究について教えてください
+research	voice	研究について知りたいです
+dissertation	typed	博士論文について教えてください
+experience	typed	インターンについて聞きたいです

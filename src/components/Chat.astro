@@ -5,11 +5,12 @@
 // or fail without the other:
 //   chat:reply-start / chat:reply-end           a reply begins / ends (with its plain and tagged text)
 //   chat:tag   { kind: "act" | "emo", name, strength?, at }   a behavior tag the text just reached
-//   character:loaded                            (dispatched by the character) start loading voice dictionaries
 // Shino's own voice (voice.ts) listens to the same events; the Voice button in the top bar
 // (ChatStage.astro) turns it on and off.
-// Voice has two modes, chosen the first time the visitor taps the microphone and switchable
-// from the note under the input: tap to ask (asr.ts) and conversation (conversation.ts).
+// While her voice is off, a "Hear Shino" button under the opening line turns it on, and she
+// greets out loud. Voice input has two modes, chosen the first time the visitor taps the
+// microphone and changeable from the small arrow next to it: tap to ask (asr.ts) and
+// conversation (conversation.ts).
 import type { Lang } from "../i18n/ui";
 import { chatStrings } from "../data/chat/strings";
 // The voice's credit line, required by the VOICEVOX speaker's terms wherever her voice is used.
@@ -33,20 +34,32 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
   <p class="chat-asked" data-asked hidden><span class="chat-sr">{strings.youAsked} </span><span data-asked-text></span></p>
   <!-- About four lines tall so the reply never covers much of the character. Replies stream in
        and the caption follows the newest text; tabindex lets keyboard users scroll back. -->
-  <div class="chat-caption" data-caption aria-live="polite" tabindex="0">
-    <div class="msg-text">{intro}</div>
+  <div class="chat-reply">
+    <div class="chat-caption" data-caption aria-live="polite" tabindex="0">
+      <div class="msg-text">{intro}</div>
+    </div>
+    <!-- Only while the opening line is showing and her voice is off (shown by the script). -->
+    <div class="chat-hear" data-hear hidden>
+      <button type="button" class="chat-hear-btn" data-hear-btn>
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"></path>
+          <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"></path>
+        </svg>
+        <span>{strings.hearShino}</span>
+      </button>
+    </div>
   </div>
   <div class="chat-chips" data-chips role="group" aria-label={strings.suggested}></div>
-  <!-- Shown the first time the visitor taps the microphone; switchable later from the note. -->
-  <div class="chat-voice-choice" data-voice-choice hidden role="group" aria-labelledby={`chat-voice-title-${lang}`}>
+  <!-- Shown the first time the visitor taps the microphone, and again from the arrow next to it. -->
+  <div class="chat-voice-choice" id={`chat-voice-choice-${lang}`} data-voice-choice hidden role="group" aria-labelledby={`chat-voice-title-${lang}`}>
     <p class="chat-voice-title" id={`chat-voice-title-${lang}`}>{strings.voiceChoiceTitle}</p>
     <div class="chat-voice-options">
       <button type="button" class="chat-voice-option" data-voice-mode="conversation">
-        <span class="chat-voice-name">{strings.modeConversation}</span>
+        <span class="chat-voice-name">{strings.modeConversation}<svg class="chat-voice-check" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
         <span class="chat-voice-desc">{strings.modeConversationDesc}</span>
       </button>
       <button type="button" class="chat-voice-option" data-voice-mode="tap">
-        <span class="chat-voice-name">{strings.modeTap}</span>
+        <span class="chat-voice-name">{strings.modeTap}<svg class="chat-voice-check" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
         <span class="chat-voice-desc">{strings.modeTapDesc}</span>
       </button>
     </div>
@@ -61,6 +74,13 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
         <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"></path>
       </svg>
     </button>
+    <!-- Reopens the voice mode choice. Shown once a mode is chosen, except while tap to ask
+         is listening, so the stop button stands alone then. -->
+    <button type="button" class="chat-icon chat-mic-more" data-mic-more hidden aria-controls={`chat-voice-choice-${lang}`} aria-expanded="false" aria-label={strings.changeVoiceMode} title={strings.changeVoiceMode}>
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 14.5l5-5 5 5"></path>
+      </svg>
+    </button>
     <button type="submit" class="chat-icon chat-send" data-send aria-label={strings.send} title={strings.send}>
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 19V5M6 11l6-6 6 6"></path>
@@ -71,7 +91,6 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     <span>{strings.disclosure}</span>
     {voiceCredit && <span>{strings.voiceCredit.replace("{credit}", voiceCredit)}</span>}
     <span data-status role="status" hidden></span>
-    <button type="button" class="chat-mode-switch" data-voice-switch hidden></button>
   </div>
   <aside class="chat-transcript" id={`chat-transcript-${lang}`} data-transcript hidden aria-label={strings.transcript}>
     <div class="chat-transcript-head">
@@ -101,8 +120,7 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     micStart: string;
     micStop: string;
     micConversation: string;
-    switchToTap: string;
-    switchToConversation: string;
+    changeVoiceMode: string;
     listeningNote: string;
     conversationFallback: string;
     idleStopped: string;
@@ -137,7 +155,8 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     const openBtn = (root.closest("[data-chat-stage]") ?? document).querySelector<HTMLButtonElement>("[data-chat-transcript-toggle]");
     const log = $<HTMLOListElement>("[data-log]");
     const choice = $<HTMLElement>("[data-voice-choice]");
-    const modeSwitch = $<HTMLButtonElement>("[data-voice-switch]");
+    const micMore = $<HTMLButtonElement>("[data-mic-more]");
+    const hear = $<HTMLElement>("[data-hear]");
     let currentChips: Chip[] = []; // so "Did you mean …?" can be answered out loud
     let lastAsked = ""; // the "You asked" line, restored after live speech is shown there
     let afterIdle: (() => void) | null = null; // runs when the controller stops being busy
@@ -338,6 +357,26 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     const stage = root.closest("[data-chat-stage]") ?? document;
     const player = new VoicePlayer(lang);
     const voiceBtn = stage.querySelector<HTMLButtonElement>("[data-chat-voice-toggle]");
+    // The opening line is still the caption: nothing has been asked or restored yet.
+    const atOpening = () => caption.textContent?.trim() === root.dataset.chatIntro;
+    const setVoice = (on: boolean) => {
+      player.setEnabled(on);
+      // Turned on before anything was said on this page: she greets out loud.
+      if (on && atOpening()) player.sayOnce(root.dataset.chatIntro!);
+    };
+    // "Hear Shino" under the opening line: the same as turning on the Voice button, which it
+    // presses, so the visitor sees where to turn her off. Gone once she has spoken or the
+    // caption shows anything else.
+    const syncHear = () => {
+      hear.hidden = !voiceBtn || player.enabled || player.hasSpoken || !atOpening();
+    };
+    $<HTMLButtonElement>("[data-hear-btn]").addEventListener("click", () => {
+      setVoice(true);
+      voiceBtn?.focus(); // the button disappears; keep keyboard focus on the setting it changed
+    });
+    new MutationObserver(syncHear).observe(caption, { childList: true, subtree: true, characterData: true });
+    window.addEventListener("character:voice-state", syncHear);
+    syncHear();
     const syncVoiceBtn = () => {
       voiceBtn?.setAttribute("aria-pressed", String(player.enabled));
       controller.setVoiceCaptions(player.enabled); // with voice on, captions follow the audio
@@ -346,11 +385,7 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     if (voiceBtn) {
       voiceBtn.hidden = false;
       syncVoiceBtn();
-      voiceBtn.addEventListener("click", () => {
-        player.setEnabled(!player.enabled);
-        // Turned on before anything was said on this page: she greets out loud.
-        if (player.enabled && caption.textContent?.trim() === root.dataset.chatIntro) player.sayOnce(root.dataset.chatIntro!);
-      });
+      voiceBtn.addEventListener("click", () => setVoice(!player.enabled));
     }
     window.addEventListener("character:voice-state", syncVoiceBtn);
     // Mobile browsers only play audio after a gesture: any tap or key in the chat counts.
@@ -393,6 +428,7 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     );
 
     function setupVoice(phrases: string[]) {
+      void controller.warmPhonemes();
       mic.hidden = false;
       let transcribeNote = "";
       const setStatus = (text: string) => {
@@ -403,10 +439,6 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
         transcribeNote = local ? s.voiceLocal : s.voiceCloud;
         if (status.hidden) setStatus(transcribeNote);
       });
-      // Load the pronunciation dictionary once the character is in, or after a few seconds.
-      const warm = () => controller.warmPhonemes();
-      window.addEventListener("character:loaded", warm, { once: true });
-      setTimeout(warm, 6000);
 
       /* ----- Mode: asked on the first tap, kept for the tab like the conversation ----- */
       type Mode = "conversation" | "tap";
@@ -429,8 +461,7 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
         mic.setAttribute("aria-label", label);
         mic.title = label;
         root.classList.toggle("is-listening", live);
-        modeSwitch.hidden = !mode;
-        modeSwitch.textContent = mode === "conversation" ? s.switchToTap : s.switchToConversation;
+        micMore.hidden = !mode || !!tap;
       };
       const setMode = (m: Mode) => {
         mode = m;
@@ -443,17 +474,27 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
       };
       updateMic();
 
-      const openChoice = () => {
+      const options = [...choice.querySelectorAll<HTMLButtonElement>("[data-voice-mode]")];
+      let opener: HTMLButtonElement = mic; // focus goes back here when the choice closes
+      const openChoice = (from: HTMLButtonElement) => {
+        opener = from;
+        // Reopened from the arrow: the current mode is marked, and focused.
+        for (const b of options) {
+          if (b.dataset.voiceMode === mode) b.setAttribute("aria-current", "true");
+          else b.removeAttribute("aria-current");
+        }
         choice.hidden = false;
         root.classList.add("is-choosing");
-        choice.querySelector<HTMLButtonElement>("[data-voice-mode]")?.focus();
+        micMore.setAttribute("aria-expanded", "true");
+        (options.find((b) => b.dataset.voiceMode === mode) ?? options[0])?.focus();
       };
       closeChoice = (focusMic = true) => {
         choice.hidden = true;
         root.classList.remove("is-choosing");
-        if (focusMic) mic.focus();
+        micMore.setAttribute("aria-expanded", "false");
+        if (focusMic) (opener.hidden ? mic : opener).focus();
       };
-      for (const b of choice.querySelectorAll<HTMLButtonElement>("[data-voice-mode]")) {
+      for (const b of options) {
         b.addEventListener("click", () => {
           closeChoice(false);
           setMode(b.dataset.voiceMode as Mode);
@@ -474,15 +515,16 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
         if (tap) return tap.stop(); // tap to ask: stop early and keep what was heard
         if (conv?.isActive) return conv.stop("user");
         if (choosing()) return closeChoice();
-        if (!mode) return openChoice();
+        if (!mode) return openChoice(mic);
         startVoice();
       });
-      modeSwitch.addEventListener("click", () => {
-        const next: Mode = mode === "conversation" ? "tap" : "conversation";
+      micMore.addEventListener("click", () => {
+        if (choosing()) return closeChoice();
+        // A live conversation stops while the choice is open, so the mic doesn't hear it.
+        // (The arrow is hidden while tap to ask listens.) Picking a mode starts it right away,
+        // as on the first tap; "Not now" just closes.
         stopAll("user");
-        setMode(next);
-        // Choosing conversation is a request to talk now; tap to ask waits for the mic.
-        if (next === "conversation") startConversation();
+        openChoice(micMore);
       });
       const startVoice = () => (mode === "conversation" ? startConversation() : startTap());
 
@@ -495,7 +537,6 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
 
       /* ----- Tap to ask: one question, shown in the input to check before sending ----- */
       async function startTap() {
-        warm();
         input.value = "";
         grow();
         tapCancelled = false;
@@ -594,7 +635,6 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
       });
 
       async function startConversation() {
-        warm();
         // A spoken conversation gets spoken answers (unless voice was turned off in this tab).
         // Here, still inside the click that started it, so the browser allows the audio.
         player.autoEnable();
@@ -696,6 +736,11 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     vertical-align: 1px;
     animation: chat-pulse 1.2s var(--ease-in-out) infinite;
   }
+  /* The caption and, under the opening line, "Hear Shino", on one card. */
+  .chat .chat-reply {
+    border-radius: 14px;
+    background: var(--agent-soft);
+  }
   .chat .chat-caption {
     /* About four lines of text; longer replies scroll inside the caption. */
     max-height: min(20vh, 7.5rem); /* for browsers without the lh unit */
@@ -705,10 +750,40 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     scrollbar-width: thin;
     padding: 10px 14px;
     border-radius: 14px;
-    background: var(--agent-soft);
     color: var(--ink);
     font-size: 15px;
     line-height: 1.55;
+  }
+  .chat .chat-hear {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -4px;
+    padding: 0 10px 10px;
+  }
+  .chat .chat-hear[hidden] {
+    display: none;
+  }
+  .chat .chat-hear-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 3px 12px 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 160ms var(--ease-out), border-color 160ms var(--ease-out);
+  }
+  .chat .chat-hear-btn:hover {
+    background: var(--hover);
+    border-color: var(--ink-3);
+  }
+  .chat .chat-hear-btn svg {
+    color: var(--agent);
   }
   .chat .chat-caption.has-more {
     mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6em), transparent);
@@ -828,16 +903,31 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     border-color: var(--ink-3);
   }
   .chat .chat-voice-name {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
     font-size: 14px;
     font-weight: 550;
+  }
+  /* The mode in use, when the choice is reopened from the arrow next to the mic. */
+  .chat .chat-voice-check {
+    display: none;
+    flex: none;
+    color: var(--agent);
+  }
+  .chat .chat-voice-option[aria-current] {
+    border-color: var(--agent);
+  }
+  .chat .chat-voice-option[aria-current] .chat-voice-check {
+    display: block;
   }
   .chat .chat-voice-desc {
     font-size: 13px;
     line-height: 1.4;
     color: var(--ink-2);
   }
-  .chat .chat-voice-dismiss,
-  .chat .chat-mode-switch {
+  .chat .chat-voice-dismiss {
     padding: 0;
     border: 0;
     background: none;
@@ -851,12 +941,8 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
     align-self: center;
     font-size: 13px;
   }
-  .chat .chat-voice-dismiss:hover,
-  .chat .chat-mode-switch:hover {
+  .chat .chat-voice-dismiss:hover {
     color: var(--ink);
-  }
-  .chat .chat-mode-switch[hidden] {
-    display: none;
   }
 
   .chat .chat-input {
@@ -901,6 +987,22 @@ const voiceCredit = lang === "ja" ? voices.ja.credit : "";
   }
   .chat .chat-icon:hover {
     background: var(--hover);
+    color: var(--ink);
+  }
+  /* display: grid above would otherwise override the hidden attribute (the mic in browsers
+     without speech recognition, the arrow before a mode is chosen). */
+  .chat .chat-icon[hidden] {
+    display: none;
+  }
+  /* The arrow sits right against the mic, so it reads as part of it rather than another
+     button: no background of its own, only a color change. 24px wide keeps it a usable target. */
+  .chat .chat-mic-more {
+    width: 24px;
+    margin-left: -4px;
+  }
+  .chat .chat-mic-more:hover,
+  .chat .chat-mic-more[aria-expanded="true"] {
+    background: transparent;
     color: var(--ink);
   }
   .chat .chat-send {

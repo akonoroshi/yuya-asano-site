@@ -21,8 +21,10 @@ export const chatStrings = {
     modeTap: "Tap to ask",
     modeTapDesc: "Tap the mic for each question, then check the text before sending.",
     notNow: "Not now",
-    switchToTap: "Switch to tap to ask",
-    switchToConversation: "Switch to conversation",
+    // The small arrow next to the mic, once a mode is chosen: reopens the choice above.
+    changeVoiceMode: "Change how you use voice",
+    // Under the opening line while Shino's voice is off: turns her voice on and she greets out loud.
+    hearShino: "Hear Shino",
     listeningNote: "Listening. Tap the mic to stop.",
     conversationFallback: "Conversation mode doesn't work in this browser, so voice is set to tap to ask.",
     idleStopped: "Stopped listening after a quiet minute. Tap the mic to start again.",
@@ -88,8 +90,8 @@ export const chatStrings = {
     modeTap: "タップして質問",
     modeTapDesc: "質問ごとにマイクをタップし、文字を確認してから送信します。",
     notNow: "今はやめる",
-    switchToTap: "タップして質問に切り替える",
-    switchToConversation: "会話に切り替える",
+    changeVoiceMode: "音声の使い方を変える",
+    hearShino: "しのの声を聞く",
     listeningNote: "聞き取り中です。マイクをタップすると止まります。",
     conversationFallback: "このブラウザでは会話モードが使えないため、タップして質問に切り替えました。",
     idleStopped: "しばらく音声がなかったため、聞き取りを止めました。マイクをタップすると再開します。",

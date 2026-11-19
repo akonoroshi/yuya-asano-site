@@ -5,11 +5,23 @@
 // Tags never reach the screen, the transcript, the retrieval index, or the LLM's history: they
 // are parsed out here and sent to the character as events with their position in the plain text.
 
+const curatedHoldTagPairs = [
+  ["material_reference_start", "material_reference_release"],
+  ["palms_together_start", "palms_together_release"],
+] as const;
+const curatedHoldTags = curatedHoldTagPairs.flat();
+export const curatedHoldReleaseTags = curatedHoldTagPairs.map(([, release]) => release);
+export type CuratedHoldTag = (typeof curatedHoldTags)[number];
+
+export function isCuratedHoldTag(name: string | undefined): name is CuratedHoldTag {
+  return curatedHoldTags.some((tag) => tag === name);
+}
+
 export const ACTS = [
   "greet", "farewell", "think", "prompt_user_first", "confident_claim", "request_explain",
   "check_understanding", "listen_learn", "realize", "self_correct", "co_celebrate",
   "admire_explanation", "normalize_error", "take_break", "resume_study", "commit_answer",
-  "wait_user", "ack", "beat", "material_reference", "cross_arms_start", "cross_arms_release",
+  "wait_user", "ack", "beat", "material_reference", "cross_arms_start", "cross_arms_release", ...curatedHoldTags,
 ] as const;
 export const EMOTIONS = ["neutral", "focused", "happy", "concerned", "relaxed"] as const;
 export type Act = (typeof ACTS)[number];
@@ -43,7 +55,7 @@ export function readTag(kind: string, name: string, strength?: string): TagBody 
  * Splits tagged text into plain text and tags with their positions (in characters of the plain
  * text). Invalid tags are dropped and reported in `errors`, so a typo never shows up on screen.
  */
-export function parseTags(tagged: string): { text: string; tags: Tag[]; errors: string[] } {
+export function parseTags(tagged: string, mode: "trusted" | "llm" = "trusted"): { text: string; tags: Tag[]; errors: string[] } {
   const tags: Tag[] = [];
   const errors: string[] = [];
   let text = "";
@@ -53,7 +65,9 @@ export function parseTags(tagged: string): { text: string; tags: Tag[]; errors: 
     last = m.index! + m[0].length;
     const tag = readTag(m[1], m[2], m[3]);
     if (typeof tag === "string") errors.push(`${m[0]}: ${tag}`);
-    else tags.push({ ...tag, at: text.length });
+    else if (mode === "trusted" || tag.kind !== "act" || !isCuratedHoldTag(tag.name)) {
+      tags.push({ ...tag, at: text.length });
+    }
   }
   text += tagged.slice(last);
   return { text, tags, errors };
@@ -88,7 +102,7 @@ export class TagStream {
   }
 
   private emit(s: string) {
-    const { text, tags } = parseTags(s);
+    const { text, tags } = parseTags(s, "llm");
     const shifted = tags.map((t) => ({ ...t, at: t.at + this.offset }));
     this.offset += text.length;
     return { text, tags: shifted };

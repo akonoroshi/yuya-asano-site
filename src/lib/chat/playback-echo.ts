@@ -34,10 +34,6 @@ export class PlaybackEcho {
     if (current) current.end = Math.min(current.end, now);
   }
 
-  isRecent(now: number): boolean {
-    return this.units.some((unit) => now <= unit.end + ECHO_TAIL_MS);
-  }
-
   matches(text: string, now: number): boolean {
     if (!text) return false;
     const recent = this.units.filter((unit) => now <= unit.end + ECHO_TAIL_MS);

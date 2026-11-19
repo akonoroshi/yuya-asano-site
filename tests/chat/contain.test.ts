@@ -36,3 +36,10 @@ test("Japanese, by characters", () => {
   assert.equal(route("ETSの給料はいくらでしたか", "ja", ja).kind, "none");
   assert.equal(route("研究テーマ", "ja", [entry("research", "テーマ", "ja")]).kind, "none", "under 4 characters");
 });
+
+test("a bare topic name is never looked for inside a question", () => {
+  const entries = [{ ...entry("research", "his research"), name: true as const }, entry("research", "Tell me about his research")];
+  assert.equal(route("Who funds his research?", "en", entries).kind, "none");
+  const r = route("so tell me about his research please", "en", entries);
+  assert.ok(r.kind === "faq" && r.id === "research" && r.confirm, "the framed phrasing still counts");
+});

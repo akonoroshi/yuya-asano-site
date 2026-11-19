@@ -15,6 +15,9 @@ export interface ContextEntry {
   text: string; // phrasing as written
   norm: string; // normalized text, for fuzzy matching
   ph: string; // phoneme string, one character per phoneme (see phonemes.ts)
+  /** A topic's bare name ("his research", "Emma"): it says what a question is about, not what it
+   *  asks, so containment never looks for it inside a longer question. */
+  name?: true;
 }
 
 export interface Answer {

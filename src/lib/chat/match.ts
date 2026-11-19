@@ -100,6 +100,7 @@ export function containRoute(normalized: string, entries: ContextEntry[], lang: 
   const words = lang === "en" ? normalized.split(" ") : null;
   let best: { e: ContextEntry; score: number } | null = null;
   for (const e of entries) {
+    if (e.name) continue; // a bare topic name inside a question isn't the question
     const L = e.norm.length;
     const size = lang === "en" ? e.norm.split(" ").length : L;
     if (size < cfg.containMin || L >= normalized.length) continue; // too generic, or not shorter than the question

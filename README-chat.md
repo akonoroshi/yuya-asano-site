@@ -26,10 +26,14 @@ Cheapest first. Most questions should stop at step 1 or 2.
   `src/lib/chat/variants.ts`: the FAQ addresses Yuya as "you", but visitors talk to Shino about
   him ("What did he do at ETS?"). A generated variant never takes a phrasing that another topic
   wrote by hand.
-- the chip label in common frames ("Tell me about …", "Can you tell me about …?", 「…について
-  教えてください」, 「…のことを聞きたいです」; `FRAMES` in `variants.ts`), both languages, so a
-  topic asked about by name gets its answer directly. Labels that are already a frame ("About
-  Yuya", 「浅野について」) get none. Frames not in the list go to containment, then the LLM.
+- the chip label and the topic's `names` (what visitors call it: "his research", "the ETS
+  internship", 「研究」, 「博士論文」), each on its own and in common frames ("Tell me about …",
+  "Can you tell me about …?", 「…について教えてください」, 「…のことを聞きたいです」; `FRAMES` in
+  `variants.ts`), both languages, so a topic asked about by name gets its answer directly. English
+  names starting with "his" also get "Yuya's" and "your" versions. Labels that are already a frame
+  ("About Yuya", 「浅野について」) get no frames. A bare name is never looked for inside a longer
+  question (containment): "Who funds his research?" mentions the research topic but doesn't ask
+  for it. When a visitor names a topic in a way that misses, add the name to that topic's `names`.
 - questions asked of Shino herself, in a topic's `toShino` list ("How do you work?", "What model
   are you?"). There "you" means her, so they get no variants. Whole topics addressed to her
   (`who`, `greeting`, `thanks`) are listed in `shinoTopics` in `faq.ts` instead.
@@ -109,19 +113,27 @@ The first time a visitor taps the microphone, the chips row is replaced by a sma
   This is how voice worked before.
 
 Nothing is asked of visitors who never tap the microphone. The choice is kept for the tab in
-`sessionStorage` (`chat:voice-mode`), like the conversation, and a link in the note under the
-input switches modes at any time. Switching to conversation starts listening right away.
+`sessionStorage` (`chat:voice-mode`), like the conversation. Once a mode is chosen, a small
+arrow next to the mic reopens the choice, with the current mode marked; picking a mode starts
+listening right away, and "Not now" just closes it. A live conversation stops while the choice is
+open. The arrow is hidden while tap to ask is listening, so a near-miss can't throw away a
+half-spoken question.
+
+**Hearing Shino.** Her voice is off until the visitor turns it on. While the opening line is still
+the caption, a "Hear Shino" button under it does the same as the Voice button in the top bar
+(which it presses), and she greets out loud. It disappears once her voice is on, once she has
+spoken on the page, or once the caption shows anything else.
 
 **When a turn ends.** Every 20 ms, `conversation.ts` reads the microphone level and the
 recognizer's words, and `turn.ts` decides:
 
 - Speech starts and stops by loudness over a noise floor that adapts to the room (`VadTracker`).
-- The silence that ends a turn depends on how the words end (`endOfTurnDelay`): 0.6 s if it
-  sounds finished ("what is his dissertation", 「教えてください」), 1.4 s mid-phrase ("…and the",
-  「…なんですけど」), 0.9 s otherwise, 2.5 s if no words have arrived yet.
-- Then it waits up to 0.5 s for the recognizer's final result, which has the alternatives the
-  fuzzy and phonetic matching use. Continuous recognition splits a turn into segments; the turn's
-  alternatives are the earlier segments' best guesses followed by each alternative of the last.
+- A turn needs 0.6 s of silence, or 1.2 s after a continuation cue ("…and", 「…なんですけど」).
+  If no words arrive after 2.5 s of silence, the turn is dropped.
+- In parallel, the listener waits for the transcript to be final or its top text to stay
+  unchanged for 0.2 s. If the microphone level is unavailable, the time since the last change
+  is also used to estimate silence. Continuous recognition splits a turn into segments. The
+  turn's alternatives are the earlier segments' best guesses followed by each alternative of the last.
 - "Um" alone, or "mm-hmm" said while Shino was talking, is dropped instead of sent.
 
 **Listening: nods and backchannels.** While the visitor talks, Shino does two things:
@@ -149,7 +161,8 @@ dropped, so nothing lands on her answer.
 **While Shino talks.** The microphone requests system-wide echo cancellation where supported
 and falls back to the browser's default echo cancellation. Recognition uses that track where
 supported. During playback and briefly afterward, recognition results that match recent spoken
-audio are filtered. An interruption (`voice:barge-in`) requires a final result, a stable phrase,
+audio are filtered. Microphone-based turn detection and listening cues resume when playback ends.
+An interruption (`voice:barge-in`) requires a final result, a stable phrase,
 or a command like "wait" or 「ちょっと待って」. Background sounds, "mm-hmm", and 「うん」 are
 ignored. A question asked while she's busy waits and is sent when she finishes. If there are
 several, the latest wins. With her voice off, the original 0.5 s speech threshold or a recognized

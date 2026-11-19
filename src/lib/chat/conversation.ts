@@ -1,8 +1,8 @@
 // Conversation mode: the microphone stays on, and the page (not the browser) decides when the
 // visitor has finished a turn. Two inputs, combined every frame:
 //   - loudness from the microphone (Web Audio), for when speech starts and stops (VadTracker)
-//   - the recognizer's words (Web Speech API, continuous), for what was said and whether it
-//     sounds finished (endOfTurnDelay)
+//   - the recognizer's words (Web Speech API, continuous), for transcript stability and
+//     continuation cues (endOfTurnDelay)
 // The timing rules live in turn.ts, so they can be unit-tested; this file is the browser glue.
 //
 // Window events, for the character and the voice player (see README-chat.md):
@@ -89,6 +89,7 @@ export class ConversationListener {
   private segments: Segment[] = []; // this turn, in this recognition session
   private carry: Segment[] = []; // this turn, from a session that ended mid-turn
   private lastResultAt = -Infinity;
+  private lastTextChangeAt = -Infinity;
   private restarts: number[] = [];
 
   // Turn state
@@ -96,7 +97,6 @@ export class ConversationListener {
   private spokenMs = 0; // speech in this turn, from the microphone level
   private talkingSignalled = false;
   private startedOverShino = false;
-  private finalWaitSince: number | null = null;
   private lastActivityAt = 0;
   private nods: ListeningNods; // silent nods: pauses, low-pitch cues, long stretches
   private lowPitch: LowPitchRule; // Ward & Tsukahara's low-pitch cue: a spoken backchannel or a nod
@@ -190,6 +190,8 @@ export class ConversationListener {
    * interruption (voice:barge-in), and "mm-hmm" isn't taken as a question.
    */
   setSpeaking(on: boolean, audible = false) {
+    // Rearm the mic at the end of playback if it was still tracking speaker audio.
+    if (this.audible && !(on && audible) && !this.inTurn) this.vad.resetSpeech();
     this.audible = on && audible;
     if (on === this.shinoSpeaking) return;
     this.shinoSpeaking = on;
@@ -227,6 +229,8 @@ export class ConversationListener {
       if (this.rec !== rec) return;
       const now = performance.now();
       this.resultCount = e.results.length;
+      // The recognizer can remove a consumed interim result and reuse its index.
+      this.consumed = Math.min(this.consumed, this.resultCount);
       const start = Math.max(this.consumed, e.resultIndex);
       const segs = this.segments.slice(0, start - this.consumed);
       for (let i = start; i < e.results.length; i++) {
@@ -250,13 +254,16 @@ export class ConversationListener {
         const filtered = echo ? [] : alts.filter((text, k) => k === 0 || !this.playback.matches(echoText(text, this.lang), now));
         segs.push({ final: r.isFinal, alts: filtered, recognized, echo, stable, backchannels });
       }
+      const previousText = this.currentText();
       this.segments = segs;
+      const text = this.currentText();
+      if (text !== previousText) this.lastTextChangeAt = now;
       if (segs.some((s) => s.alts.length)) {
         this.lastResultAt = now;
         this.lastActivityAt = now;
         if (!this.inTurn) this.beginTurn(now);
       }
-      this.h.onInterim(this.currentText());
+      this.h.onInterim(text);
     };
     rec.onerror = (e) => {
       if (this.rec !== rec) return;
@@ -311,7 +318,7 @@ export class ConversationListener {
   private tick() {
     if (!this.active) return;
     const now = performance.now();
-    const duringPlayback = this.audible || this.playback.isRecent(now);
+    const duringPlayback = this.audible;
     const hasLevel = !!(this.analyser && this.samples);
     if (hasLevel) {
       this.analyser!.getFloatTimeDomainData(this.samples!);
@@ -319,7 +326,6 @@ export class ConversationListener {
         if (ev.type === "speech-start") {
           this.lastActivityAt = now;
           this.nods.speechResumed();
-          this.finalWaitSince = null;
           if (!duringPlayback) {
             if (!this.inTurn) this.beginTurn(ev.at);
             emit("voice:speech-start");
@@ -367,11 +373,15 @@ export class ConversationListener {
     if (this.inTurn && !this.vad.speaking) {
       // Silence so far: from the level meter if it heard this turn, else from the recognizer.
       const heard = hasLevel && this.spokenMs > 0;
-      const pauseMs = now - (heard ? this.vad.lastLoudAt : this.lastResultAt);
+      const pauseMs = now - (heard ? this.vad.lastLoudAt : this.lastTextChangeAt);
       const endMs = endOfTurnDelay(text, this.lang);
       // A short way into a pause.
       if (heard && !this.shinoSpeaking && !duringPlayback && this.nods.pause(now, pauseMs, this.spokenMs, endMs)) emit("voice:nod");
-      if (pauseMs >= endMs) this.finishTurn(now);
+      if (pauseMs >= endMs) {
+        const stable = now - this.lastTextChangeAt >= TURN_CONFIG.endOfTurn.stableTextMs;
+        const final = [...this.carry, ...this.segments].every((s) => !s.alts.length || s.final);
+        if (!text || stable || final) this.finishTurn();
+      }
     }
 
     // Don't leave the microphone on in an empty room.
@@ -385,18 +395,10 @@ export class ConversationListener {
     this.spokenMs = 0;
     this.talkingSignalled = false;
     this.startedOverShino = this.shinoSpeaking;
-    this.finalWaitSince = null;
     this.lastActivityAt = at;
   }
 
-  private finishTurn(now: number) {
-    // The recognizer's final result (with its alternatives) usually lands just after the
-    // silence. Wait briefly for it; if it doesn't come, use the interim words.
-    const last = this.segments.findLast((s) => s.alts.length);
-    if (last && !last.final) {
-      this.finalWaitSince ??= now;
-      if (now - this.finalWaitSince < TURN_CONFIG.endOfTurn.finalGraceMs) return;
-    }
+  private finishTurn() {
     // Known mishearings ("you yeah" for Yuya) are fixed before anything else sees them.
     const alternatives = repairAlternatives(combineSegments([...this.carry, ...this.segments].map((s) => s.alts), this.lang), this.lang);
     const lastFinal = this.segments.findLast((s) => s.final && s.alts.length);
@@ -421,7 +423,7 @@ export class ConversationListener {
     this.spokenMs = 0;
     this.talkingSignalled = false;
     this.startedOverShino = false;
-    this.finalWaitSince = null;
+    this.lastTextChangeAt = -Infinity;
     this.segments = [];
     this.carry = [];
   }

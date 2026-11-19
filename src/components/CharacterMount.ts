@@ -6,6 +6,7 @@ import { CompanionMotion, armFoldTags, internalIntents, publicIntents } from "@t
 import { createBundledModels } from "@tonari/characters/models";
 import type { AvatarMood, Intent, Mood } from "@tonari/characters/gestures";
 import { characterEvents } from "../lib/chat/character-events";
+import { curatedHoldReleaseTags, isCuratedHoldTag, type CuratedHoldTag } from "../lib/chat/tags";
 
 const assetBase = "/characters/avatars";
 const seatedAnimationUrl = "/characters/animations/study-seated.vrma";
@@ -32,6 +33,28 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
   const initialEvents = useRef(pending);
 
   useLayoutEffect(() => {
+    let replyInProgress = false;
+    let voicePending = false;
+    const applyCuratedHold = (tag: CuratedHoldTag, now = performance.now() / 1000) => {
+      if ("applyGestureHoldTag" in motion && typeof motion.applyGestureHoldTag === "function") {
+        motion.applyGestureHoldTag(tag, now);
+      }
+    };
+    const releaseCuratedHolds = (now = performance.now() / 1000) => {
+      for (const tag of curatedHoldReleaseTags) applyCuratedHold(tag, now);
+    };
+    const settleMood = () => {
+      if ("setMood" in motion && typeof motion.setMood === "function") motion.setMood("relaxed");
+      setMood("relaxed");
+    };
+    const updateReplyState = () => {
+      const inProgress = replyInProgress || voicePending;
+      setSpeaking(inProgress);
+      if (!inProgress) {
+        releaseCuratedHolds();
+        settleMood();
+      }
+    };
     const onOpen = (event: Event) => {
       if ((event as CustomEvent<{ slot?: HTMLElement }>).detail?.slot !== slot) return;
       setActive(true);
@@ -44,9 +67,13 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
         loadedOnce.current = false;
         analyser.current = undefined;
         audioLevel.current = 0;
+        replyInProgress = false;
+        voicePending = false;
         const now = performance.now() / 1000;
         motion.applyArmFoldTag("cross_arms_release", now);
+        releaseCuratedHolds(now);
         motion.interrupt(now);
+        settleMood();
       }
     };
     const onTag = (event: Event) => {
@@ -55,15 +82,21 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
         setMood(detail.name as Mood);
       } else if (detail?.kind === "act" && armFoldTags.includes(detail.name as (typeof armFoldTags)[number])) {
         motion.applyArmFoldTag(detail.name as (typeof armFoldTags)[number], performance.now() / 1000);
+      } else if (detail?.kind === "act" && isCuratedHoldTag(detail.name)) {
+        applyCuratedHold(detail.name);
       } else if (detail?.kind === "act" && knownIntents.has(detail.name as Intent)) {
         motion.event(detail.name as Intent, 0.7, 60, "speech", "conversation", performance.now() / 1000);
       }
     };
     const onReplyStart = () => {
+      replyInProgress = true;
       motion.releaseReplyWait(performance.now() / 1000);
       setSpeaking(true);
     };
-    const onReplyEnd = () => setSpeaking(Boolean(analyser.current));
+    const onReplyEnd = () => {
+      replyInProgress = false;
+      updateReplyState();
+    };
     const onSpeechStart = (event: Event) => {
       analyser.current = (event as CustomEvent<SpeechDetail>).detail?.analyser;
       setSpeaking(true);
@@ -71,10 +104,10 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
     const onSpeechEnd = () => {
       analyser.current = undefined;
       audioLevel.current = 0;
-      setSpeaking(false);
     };
-    const onListening = (event: Event) => {
-      setListening(Boolean((event as CustomEvent<{ on?: boolean }>).detail?.on));
+    const onVoicePending = (event: Event) => {
+      voicePending = (event as CustomEvent<boolean>).detail;
+      updateReplyState();
     };
     const onBackchannel = () => motion.event("ack", 0.45, 50, "backchannel", "conversation", performance.now() / 1000);
     const handlers: Record<(typeof characterEvents)[number], (event: Event) => void> = {
@@ -85,9 +118,14 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
       "chat:reply-end": onReplyEnd,
       "character:speech-start": onSpeechStart,
       "character:speech-end": onSpeechEnd,
+      "character:voice-pending": onVoicePending,
       "voice:backchannel": onBackchannel,
       "voice:nod": onBackchannel,
-      "voice:barge-in": () => motion.interrupt(performance.now() / 1000),
+      "voice:barge-in": () => {
+        const now = performance.now() / 1000;
+        releaseCuratedHolds(now);
+        motion.interrupt(now);
+      },
     };
     for (const name of characterEvents) window.addEventListener(name, handlers[name]);
     for (const event of initialEvents.current.splice(0)) handlers[event.type as keyof typeof handlers](event);
@@ -129,7 +167,6 @@ function CharacterView({ slot, pending }: { slot: HTMLElement; pending: Event[] 
     mood: avatarMood(mood),
     reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     phase: "conversation",
-    idleMotion: false,
     onDiagnostics: () => {
       if (loadedOnce.current) return;
       loadedOnce.current = true;

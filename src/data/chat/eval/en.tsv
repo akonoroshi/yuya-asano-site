@@ -141,3 +141,12 @@ none	typed	What inspired the name Shino?
 # A topic named in a frame not in the list: suggested by containment
 highlights	typed	Please explain research highlights
 ets	typed	I'd love to hear about ETS internship
+# A topic named the way visitors name it (names in faq.ts)
+research	voice	tell me about his research
+research	typed	Tell me about his research
+research	voice	tell me about you yeah's research
+dissertation	typed	Can you tell me about his thesis?
+ets	voice	tell me about his time at ets
+emma	typed	What about Emma?
+contact	typed	Tell me about his CV
+experience	typed	Tell me about his internships

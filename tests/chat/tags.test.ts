@@ -38,6 +38,27 @@ test("streamed tags split across chunks are held back and positioned across chun
   assert.deepEqual(t.push("at]More"), { text: "More", tags: [{ kind: "act", name: "beat", at: 13 }] });
 });
 
+for (const gesture of ["material_reference", "palms_together"] as const) {
+  test(`curated replies can hold and release ${gesture} at text positions`, () => {
+    const tagged = `[act:${gesture}_start]お願いします。[act:${gesture}_release]`;
+    assert.deepEqual(parseTags(tagged), {
+      text: "お願いします。",
+      tags: [
+        { kind: "act", name: `${gesture}_start`, at: 0 },
+        { kind: "act", name: `${gesture}_release`, at: "お願いします。".length },
+      ],
+      errors: [],
+    });
+
+    const stream = new TagStream();
+    assert.deepEqual(stream.push(`[act:${gesture}_`), { text: "", tags: [] });
+    assert.deepEqual(stream.push(`start]お願いします。[act:${gesture}_release][act:beat]`), {
+      text: "お願いします。",
+      tags: [{ kind: "act", name: "beat", at: "お願いします。".length }],
+    });
+  });
+}
+
 test("an unfinished bracket at the end is released as text on flush", () => {
   const t = new TagStream();
   assert.equal(t.push("see [1").text, "see ");

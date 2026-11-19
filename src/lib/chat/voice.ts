@@ -13,6 +13,7 @@
 // Events out (window CustomEvents):
 //   character:speech-start  { analyser }  her voice starts; read the AnalyserNode for lip sync
 //   character:speech-end                  it ended, or was stopped (barge-in, a new reply, closing)
+//   character:voice-pending  boolean      queued, fetching, or playing reply audio
 //   character:voice-state   { enabled }   the Voice setting changed
 //   voice:unit              { text, ms }  a unit's audio starts and lasts ms; ms is 0 and
 //                                         skipped true when it has no audio (the caption pacer)
@@ -105,6 +106,11 @@ export class VoicePlayer {
     return this.on;
   }
 
+  /** True once she has said anything on this page (so the opening line won't be said again). */
+  get hasSpoken() {
+    return this.spoke;
+  }
+
   /** The Voice button. Call from a click handler: browsers only allow audio after a gesture. */
   setEnabled(on: boolean) {
     this.chosen = true;
@@ -192,6 +198,7 @@ export class VoicePlayer {
     this.notify();
     if (!this.playing) {
       this.playing = true;
+      emit("character:voice-pending", true);
       void this.loop(this.gen);
     }
   }
@@ -278,6 +285,7 @@ export class VoicePlayer {
     if (gen === this.gen) {
       this.playing = false;
       this.endSpeech();
+      emit("character:voice-pending", false);
     }
   }
 
@@ -362,6 +370,7 @@ export class VoicePlayer {
     this.stopBackchannel();
     this.queue = [];
     this.open = false;
+    const wasPlaying = this.playing;
     this.playing = false;
     const src = this.source;
     this.source = null;
@@ -372,6 +381,7 @@ export class VoicePlayer {
     }
     this.notify();
     this.endSpeech();
+    if (wasPlaying) emit("character:voice-pending", false);
   }
 
   private endSpeech() {

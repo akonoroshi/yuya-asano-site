@@ -122,6 +122,26 @@ test("voice is off until turned on, and then a curated reply plays its clips in 
   assert.equal(ttsBodies.length, 0, "curated lines never call the TTS server");
 });
 
+test("queued voice stays pending through the last clip after the caption ends", async () => {
+  const pending: boolean[] = [];
+  const record = (event: Event) => pending.push((event as CustomEvent<boolean>).detail);
+  win.addEventListener("character:voice-pending", record);
+  try {
+    clipUnits = speechUnits("en", ANSWER);
+    player.setEnabled(true);
+    emit("chat:reply-start", { text: ANSWER });
+    emit("chat:reply-end");
+    assert.deepEqual(played, []);
+    assert.deepEqual(pending, [true]);
+    await until(() => pending.length === 2);
+    assert.deepEqual(pending, [true, false]);
+    assert.deepEqual(played, clipUnits.map((unit) => `clip:${unit}`));
+    assert.equal(events.at(-1), "character:speech-end");
+  } finally {
+    win.removeEventListener("character:voice-pending", record);
+  }
+});
+
 test("an LLM reply: the filler first, then each signed sentence (a clip if there is one, else live)", async () => {
   clipUnits = ["Let me see…", "He builds LLM systems."];
   player.setEnabled(true);
