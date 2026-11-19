@@ -10,6 +10,7 @@ import { ChatApiError, streamChat } from "./api.ts";
 import { parseTags, stripTags, TagStream, type Tag } from "./tags.ts";
 import { routeContain, routeFuzzy, type RouteInput } from "./route.ts";
 import { CaptionPacer } from "./pacer.ts";
+import { isSomethingElse } from "./turn.ts";
 import type { WorkerRequest, WorkerResponse } from "./phoneme.worker.ts";
 import type { ApiErrorCode, ChatContext, ChatMessage, Lang, Link, RouteResult } from "./types.ts";
 
@@ -271,6 +272,10 @@ export class ChatController {
   async ask(text: string, opts: AskOptions): Promise<void> {
     const ctx = this.ctx;
     if (!ctx || this.busy || !text.trim()) return;
+    // Conversation commands use the chip's local reply and reset, including queued turns.
+    if (opts.source === "voice" && opts.handsFree && isSomethingElse(text, this.lang)) {
+      return this.backToStart();
+    }
     this.logQuestion(text);
 
     if (opts.source === "chip") return this.answerFaq(opts.faqId, text);

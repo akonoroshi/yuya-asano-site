@@ -4,8 +4,7 @@
 // mean …?"), and the LLM never learns the question was about Yuya.
 //
 // Applied to spoken input only (asr.ts and conversation.ts, and the eval's voice rows), never to
-// typed text. Add new variants here when you hear them; the eval rows in
-// src/data/chat/eval/en.tsv show which ones are caught.
+// typed text. Add new variants here when you hear them.
 import type { Lang } from "./types.ts";
 
 // "you yeah", "you ya", "yu yah", "yoo-ya", "you yeah's" (the 's stays: "Yuya's"), and one-word
@@ -14,7 +13,10 @@ const EN_YUYA =
   /(?<!\bthank\s)(?<!\bthanks\s)\b(?:you|yu|yoo)[\s-]*(?:yeah|yea|yah|ya|yuh)\b|\b(?:youya|yuyah|yooya|yoya)\b/gi;
 
 export function repairTranscript(text: string, lang: Lang): string {
-  if (lang !== "en") return text; // Japanese recognizers write ユウヤ / ゆうや, which matching handles
+  if (lang === "ja") {
+    return text.replace(/佐野|浅尾|朝野|麻野|浅埜|朝尾/g, "浅野")
+      .replace(/朝の(?=さん|氏|先生)/g, "浅野");
+  }
   return text.replace(EN_YUYA, "Yuya");
 }
 

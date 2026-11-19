@@ -36,6 +36,16 @@ test("fuzzy: top hypothesis answers directly, a lower one asks for confirmation"
   assert.equal(lower.kind === "faq" && lower.confirm, true);
 });
 
+test("Japanese Emma transcripts match the FAQ spelling", () => {
+  const question = "Emmaは何を話すかをどう決めていますか";
+  const entries: ContextEntry[] = [{ id: "emma-llm", text: question, norm: normalizeText(question, "ja"), ph: "" }];
+  for (const name of ["エマ", "えま", "ｴﾏ", "Emma"]) {
+    const result = fuzzyRoute([normalizeText(`${name}は何を話すかをどう決めていますか`, "ja")], entries, MATCH_CONFIG.ja);
+    assert.ok(result.kind === "faq" && result.id === "emma-llm" && !result.confirm);
+  }
+  assert.notEqual(normalizeText("エマ", "en"), normalizeText("Emma", "en"));
+});
+
 test('phonetic: "for sit" is matched to "faucet", skipping the inserted "leaky"', () => {
   const r = phonemeRoute(phonemize("how can i fix a leaky bathroom for sit").ph, ctx, "en", MATCH_CONFIG.en);
   assert.equal(r.kind, "faq");

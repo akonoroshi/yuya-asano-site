@@ -301,39 +301,62 @@ export type ConfirmRole = "yes" | "as-said" | "else";
 
 const CONFIRM: Record<Lang, Record<ConfirmRole, string[]>> = {
   en: {
-    yes: ["yes", "yeah", "yep", "yup", "yes please", "correct", "right", "that's right", "that's it", "exactly", "sure", "uh huh", "mm hmm", "the first one", "first one", "yes that's right", "yeah that's right"],
-    "as-said": ["no", "nope", "no thanks", "not really", "not quite", "that's not it", "wrong", "ask what i said", "what i said", "the second one", "second one", "no that's not it"],
-    else: ["something else", "never mind", "nevermind", "cancel", "forget it", "skip"],
+    yes: [
+      "yes", "yeah", "oh yes", "oh yeah", "yep", "yup", "correct", "right", "that's right", "that's it",
+      "exactly", "sure", "uh huh", "mm hmm", "mhm", "the first one", "first one",
+      "yes please", "yes please do", "yes i did", "yes i do", "yes that's right", "yeah that's right",
+      "yes that's it", "yeah that's it", "yes exactly", "yeah exactly",
+    ],
+    "as-said": [
+      "no", "nope", "no thanks", "not really", "not quite", "that's not it", "wrong",
+      "ask what i said", "what i said", "the second one", "second one",
+      "no that's not it", "no that's wrong", "no i didn't",
+    ],
+    else: ["something else", "something different", "another topic", "a different topic", "change the topic", "change the subject", "let's talk about something else", "can we talk about something else", "something else please", "never mind", "nevermind", "cancel", "forget it", "skip"],
   },
   ja: {
-    yes: ["はい", "うん", "ええ", "そうです", "そう", "合ってます", "合っています", "あってます", "あっています", "それです", "お願いします", "はいそうです", "はいお願いします"],
-    "as-said": ["いいえ", "いや", "違います", "ちがいます", "違う", "ちがう", "違いますね", "話したとおり", "話した通り", "いいえ違います"],
-    else: ["ほかのこと", "他のこと", "別のこと", "べつのこと", "ほかの質問", "他の質問", "やめます", "やめる", "キャンセル"],
+    yes: [
+      "はい", "うん", "ええ", "そうです", "そう", "合ってます", "合っています", "あってます", "あっています",
+      "それです", "お願いします", "はいそうです", "はいお願いします", "はいそれです", "はいそれで", "はいそれでお願いします",
+      "うんそう", "うんそれ", "ええそうです", "あそうです", "あそれです", "そうそう", "そのとおりです", "その通りです",
+    ],
+    "as-said": [
+      "いいえ", "いや", "ううん", "違います", "ちがいます", "違う", "ちがう", "違いますね",
+      "話したとおり", "話した通り", "いいえ違います", "いや違います", "いやちがいます",
+      "いや違う", "いやちがう", "それじゃないです", "そうじゃないです",
+    ],
+    else: ["ほかのこと", "他のこと", "別のこと", "べつのこと", "ほかの質問", "他の質問", "別の質問", "ほかの話", "他の話", "別の話", "ほかの話題", "他の話題", "別の話題", "話題を変えて", "話題を変えたい", "別の話をしよう", "ほかのことを話したい", "他のことを話したい", "別のことを話したい", "ほかのことをお願いします", "他のことをお願いします", "別のことをお願いします", "やめます", "やめる", "キャンセル"],
   },
 };
 
 const confirmKey = (text: string, lang: Lang) =>
-  lang === "ja" ? normalizeText(text, "ja") : text.toLowerCase().replace(/[’`]/g, "'").replace(/[^\p{L}' ]+/gu, " ").replace(/\s+/g, " ").trim();
+  lang === "ja" ? normalizeText(text, "ja") : text.toLowerCase().replace(/[’`]/g, "'").replace(/[^\p{L}\p{N}' ]+/gu, " ").replace(/\s+/g, " ").trim();
 
 const CONFIRM_KEYS: Record<Lang, [string, ConfirmRole][]> = {
   en: Object.entries(CONFIRM.en).flatMap(([role, list]) => list.map((w) => [confirmKey(w, "en"), role as ConfirmRole] as [string, ConfirmRole])),
   ja: Object.entries(CONFIRM.ja).flatMap(([role, list]) => list.map((w) => [confirmKey(w, "ja"), role as ConfirmRole] as [string, ConfirmRole])),
 };
 
+/** Whole-utterance commands only: a question mentioning another topic must still be answered. */
+export function isSomethingElse(text: string, lang: Lang): boolean {
+  const key = confirmKey(text, lang);
+  if (CONFIRM_KEYS[lang].some(([k, role]) => role === "else" && key === k)) return true;
+  if (lang === "en") {
+    return /^(?:(?:let's|can we|could we|i'd like to|i want to) (?:talk about|discuss) )?(?:something else|something different|another topic|a different topic|another question|a different question)(?: please)?$/.test(key)
+      || /^(?:let's|can we|could we) change the (?:topic|subject)(?: please)?$/.test(key);
+  }
+  return /^(?:ホカノ|他ノ|別ノ|ベツノ)(?:コト|事|話|話題|質問)(?:(?:ヲ|ニツイテ)(?:話シタイ|聞キタイ|話シテ|教エテ)(?:デス|クダサイ)?|ガシタイ(?:デス)?|ニシテ(?:クダサイ)?|ニシヨウ|ヲオ願イシマス)?$/.test(key)
+    || /^話題ヲ変エ(?:テ(?:クダサイ)?|タイ(?:デス)?|マショウ)$/.test(key);
+}
+
 /**
- * A spoken answer to "Did you mean …?". Returns null for anything longer or different, which
- * is then treated as a new question ("no, I meant his ETS internship").
+ * A spoken answer to "Did you mean …?". Match the full reply so follow-up questions go through
+ * as new turns ("no, I meant his ETS internship").
  */
 export function parseConfirm(text: string, lang: Lang): ConfirmRole | null {
+  if (isSomethingElse(text, lang)) return "else";
   const key = confirmKey(text, lang);
-  if (!key) return null;
-  for (const [k, role] of CONFIRM_KEYS[lang]) if (key === k) return role;
-  // A short reply that starts with a clear yes: "yes please do", 「はい、それで」
-  if (lang === "en") {
-    const words = key.split(" ");
-    if (words.length <= 3 && ["yes", "yeah", "yep", "yup", "correct"].includes(words[0])) return "yes";
-  } else if (key.length <= 6 && /^(ハイ|ウン|エエ|ソウデス)/.test(key)) return "yes";
-  return null;
+  return CONFIRM_KEYS[lang].find(([phrase]) => key === phrase)?.[1] ?? null;
 }
 
 /* ---------- Joining the recognizer's results into one turn ---------- */

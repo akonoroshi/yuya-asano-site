@@ -13,7 +13,8 @@ export function toKatakana(s: string): string {
  */
 export function normalizeText(text: string, lang: Lang): string {
   const s = text.normalize("NFKC").toLowerCase();
-  if (lang === "ja") return toKatakana(jaSubject(s)).replace(/[\s\p{P}\p{S}]/gu, "");
+  // Japanese ASR often writes Emma's name in kana while the FAQ uses Latin letters.
+  if (lang === "ja") return toKatakana(jaSubject(s)).replace(/エマ/g, "emma").replace(/[\s\p{P}\p{S}]/gu, "");
   return s
     // "Yuya Asano" and "Asano" are the same person as "Yuya" in every phrasing.
     .replace(/\byuya\s+asano\b/g, "yuya")

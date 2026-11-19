@@ -139,20 +139,31 @@ voiced live, but clips still play.
 
 ### 5. Record the clips
 
-From your laptop, in the repo:
+Install FFmpeg on your laptop and make sure `ffmpeg` is on your PATH before recording. The recorder
+reads `TTS_SERVER_TOKEN` from `tts-server/.env`. Add the Cloudflare Access credentials to that
+file if the tunnel requires them. The repo ignores this file.
+The recorder uses `vars.TTS_URL` from `wrangler.jsonc` by default. To record against a different
+server, set `TTS_URL` in `tts-server/.env` or export it in your shell. Shell exports take
+precedence over `tts-server/.env`, which takes precedence over the repo-root `.env`.
+
+```dotenv
+TTS_SERVER_TOKEN=...
+CF_ACCESS_CLIENT_ID=...
+CF_ACCESS_CLIENT_SECRET=...
+```
+
+From the repo:
 
 ```bash
-export TTS_URL=https://tts.yuyaasano.dev TTS_SERVER_TOKEN=... CF_ACCESS_CLIENT_ID=... CF_ACCESS_CLIENT_SECRET=...
 npm run chat:voice
 git add public/voice tts-server/lexicon.json && git commit -m "Record Shino's voice" && git push
 ```
 
-Keep these out of your shell history and dotfiles: a password manager's CLI, or a `.env` file you
-`source` (the repo's `.gitignore` already excludes `.env`), works.
-
 The first run records every curated line, roughly 600 sentences per language, and takes a while
-on 2 CPU cores. The script prints an estimate. Later runs record only new or changed lines and
-delete clips nothing uses. The clips are about 15 MB in total.
+on 2 CPU cores. The script prints an estimate. Each new clip has its leading and trailing silence
+trimmed, with a short margin to protect quiet speech and with pauses within the clip preserved.
+Later runs record only new or changed lines and delete clips nothing uses. To trim existing
+recordings locally without calling the TTS server, run `npm run chat:voice -- --trim-existing`.
 
 ## Day to day
 

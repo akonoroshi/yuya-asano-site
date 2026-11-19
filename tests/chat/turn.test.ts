@@ -6,6 +6,7 @@ import {
   isBackchannel,
   isBargeIn,
   isHesitation,
+  isSomethingElse,
   levelDb,
   ListeningNods,
   parseConfirm,
@@ -13,6 +14,23 @@ import {
   TURN_CONFIG,
   VadTracker,
 } from "../../src/lib/chat/turn.ts";
+
+test("something-else commands recognize English and Japanese equivalents as whole utterances", () => {
+  for (const text of ["Something else!", "something different", "another topic", "Let's talk about something else.", "Can we talk about something else?", "I'd like to discuss another topic.", "Let's change the subject.", "Something else, please.", "Never mind."]) {
+    assert.equal(isSomethingElse(text, "en"), true, text);
+    assert.equal(parseConfirm(text, "en"), "else", text);
+  }
+  for (const text of ["ほかのこと", "他のこと。", "別のこと", "べつのこと", "別の質問", "他の話題", "話題を変えて", "話題を変えてください", "別の話をしよう", "別の話がしたいです", "他の話にしてください", "ほかのことをお願いします。", "別のことを話したい", "別のことについて聞きたいです"]) {
+    assert.equal(isSomethingElse(text, "ja"), true, text);
+    assert.equal(parseConfirm(text, "ja"), "else", text);
+  }
+  for (const text of ["", "yes", "Tell me something else about his research", "What is his research on topic change?"]) {
+    assert.equal(isSomethingElse(text, "en"), false, text);
+  }
+  for (const text of ["", "はい", "別の質問ですが研究について教えて", "他のことも研究していますか"]) {
+    assert.equal(isSomethingElse(text, "ja"), false, text);
+  }
+});
 
 /** Feeds a level for a duration, one frame at a time; returns the events and the end time. */
 function feed(vad: VadTracker, db: number, fromMs: number, forMs: number) {
@@ -132,17 +150,27 @@ test("nods: a gentle nod during a long stretch without one, and cues respect the
 });
 
 test("spoken answers to Did you mean", () => {
-  assert.equal(parseConfirm("Yes", "en"), "yes");
-  assert.equal(parseConfirm("yeah that's right", "en"), "yes");
-  assert.equal(parseConfirm("yes please do", "en"), "yes");
-  assert.equal(parseConfirm("nope", "en"), "as-said");
+  for (const text of ["Yes", "Oh, yeah!", "Oh yes", "Mhm", "Yeah, that’s right", "Yes, I did", "Yes, please do"]) {
+    assert.equal(parseConfirm(text, "en"), "yes", text);
+  }
+  for (const text of ["Nope", "No, that's wrong", "No, I didn’t"]) {
+    assert.equal(parseConfirm(text, "en"), "as-said", text);
+  }
+  for (const text of ["yeah, no", "yeah, but why?", "yeah, 2024?", "Oh yeah, what about his internship?", "no I meant his ETS internship"]) {
+    assert.equal(parseConfirm(text, "en"), null, text);
+  }
   assert.equal(parseConfirm("something else", "en"), "else");
-  assert.equal(parseConfirm("no I meant his ETS internship", "en"), null); // a new question
-  assert.equal(parseConfirm("はい", "ja"), "yes");
-  assert.equal(parseConfirm("はい、それです", "ja"), "yes");
-  assert.equal(parseConfirm("違います", "ja"), "as-said");
+
+  for (const text of ["はい", "はい、それです", "はい、それで", "はい、それでお願いします", "うん、そう", "あ、そうです", "その通りです"]) {
+    assert.equal(parseConfirm(text, "ja"), "yes", text);
+  }
+  for (const text of ["違います", "ううん", "いや、違います", "そうじゃないです"]) {
+    assert.equal(parseConfirm(text, "ja"), "as-said", text);
+  }
+  for (const text of ["はい、でも？", "うん、なぜ？", "はい、次は？", "いいえ、ETSのインターンについて知りたいです"]) {
+    assert.equal(parseConfirm(text, "ja"), null, text);
+  }
   assert.equal(parseConfirm("ほかのこと", "ja"), "else");
-  assert.equal(parseConfirm("いいえ、ETSのインターンについて知りたいです", "ja"), null);
 });
 
 test("segments: earlier best guesses, then every alternative of the last segment", () => {

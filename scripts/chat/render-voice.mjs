@@ -10,12 +10,15 @@
 //   npm run chat:voice -- --check      no server: report lines without a clip (runs before every build)
 //   npm run chat:voice -- --list [text] no server: each line's clip file, optionally only lines
 //                                      containing text ("--list mm-hmm", "--list うん")
-// Needs TTS_URL (e.g. https://tts.yuyaasano.dev, or http://localhost:8080 on the VM) and
-// TTS_SERVER_TOKEN, except with --lexicon and --check. Through the tunnel, also the Cloudflare
-// Access service token: CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET.
-import { createHash } from "node:crypto";
+//   npm run chat:voice -- --trim-existing  no server: trim already recorded clips
+// Recording uses TTS_URL from wrangler.jsonc by default and needs TTS_SERVER_TOKEN.
+// Through the tunnel, also set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET.
+// Recording and trimming require FFmpeg.
+import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { parseEnv, promisify } from "node:util";
 import { root } from "./lib.mjs";
 
 const { faq } = await import("../../src/data/chat/faq.ts");
@@ -30,11 +33,13 @@ const args = process.argv.slice(2);
 const CHECK = args.includes("--check");
 const LEXICON_ONLY = args.includes("--lexicon");
 const LIST = args.includes("--list");
+const TRIM_EXISTING = args.includes("--trim-existing");
 const LANGS = ["en", "ja"];
 const voiceDir = path.join(root, "public/voice");
 const manifestPath = path.join(voiceDir, "manifest.json");
 const lexiconPath = path.join(root, "tts-server/lexicon.json");
 const CONCURRENCY = 2; // the server synthesizes one request at a time per language anyway
+const exec = promisify(execFile);
 
 /* ---------- Lexicon ---------- */
 const lexicon = {
@@ -49,7 +54,7 @@ if (CHECK) {
   if (current !== lexiconText) {
     console.warn("! voice: tts-server/lexicon.json is out of date with terms.ts / pronunciations.ts. Run npm run chat:voice.");
   }
-} else if (current !== lexiconText) {
+} else if (!TRIM_EXISTING && current !== lexiconText) {
   await fs.writeFile(lexiconPath, lexiconText);
   console.log("✓ tts-server/lexicon.json updated");
 }
@@ -124,16 +129,90 @@ if (CHECK) {
   process.exit(0);
 }
 
+/* ---------- Trim only the ends of curated recordings ---------- */
+const EDGE_PADDING = 0.03; // Keep a short margin for quiet consonants and breaths.
+
+async function saveTrimmedClip(file, recording) {
+  const temporary = `${file}.${randomUUID()}`;
+  const source = recording ? `${temporary}.raw.tmp` : file;
+  const output = `${temporary}.tmp`;
+  try {
+    if (recording) await fs.writeFile(source, recording);
+    const inputArgs = ["-nostdin", "-hide_banner", "-nostats", "-i", source, "-map", "0:a:0"];
+    const { stdout, stderr } = await exec("ffmpeg", [
+      ...inputArgs, "-af", "silencedetect=noise=-45dB:d=0.06", "-progress", "pipe:1", "-f", "null", "-",
+    ]);
+    const duration = Number([...stdout.matchAll(/^out_time_us=(\d+)$/gm)].at(-1)?.[1]) / 1e6;
+    // Only a silence touching the start or end of the decoded audio is eligible.
+    const silences = [...stderr.matchAll(/silence_start: (\S+)[\s\S]*?silence_end: (\S+)/g)];
+    const first = silences[0];
+    const last = silences.at(-1);
+    const leading = first && Number(first[1]) <= 0.001 ? Number(first[2]) : 0;
+    const trailing = last && Math.abs(Number(last[2]) - duration) <= 0.001 ? Number(last[1]) : duration;
+    if (!Number.isFinite(duration) || duration <= 0 || leading >= trailing) {
+      throw new Error(`No audible speech in ${file}`);
+    }
+
+    const start = Math.max(0, leading - EDGE_PADDING);
+    const end = Math.min(duration, trailing + EDGE_PADDING);
+    if (start > 0 || end < duration) {
+      await exec("ffmpeg", [
+        ...inputArgs, "-loglevel", "error", "-af", `atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS`,
+        "-c:a", "libmp3lame", "-b:a", "48k", "-f", "mp3", output,
+      ]);
+      await fs.rename(output, file);
+      return true;
+    }
+    if (recording) await fs.rename(source, file);
+    return false;
+  } finally {
+    if (recording) await fs.rm(source, { force: true });
+    await fs.rm(output, { force: true });
+  }
+}
+
+if (TRIM_EXISTING) {
+  const manifest = await readManifest();
+  for (const lang of LANGS) {
+    const keys = manifest[lang]?.keys ?? [];
+    let trimmed = 0;
+    for (const key of keys) {
+      if (await saveTrimmedClip(path.join(voiceDir, lang, `${key}.mp3`))) trimmed++;
+    }
+    console.log(`${lang}: trimmed ${trimmed} of ${keys.length} clips`);
+  }
+  process.exit(0);
+}
+
 /* ---------- Record ---------- */
-const base = (process.env.TTS_URL ?? "").replace(/\/$/, "");
-const token = process.env.TTS_SERVER_TOKEN ?? "";
+async function readEnv(file) {
+  try {
+    return parseEnv(await fs.readFile(path.join(root, file), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return {};
+    throw error;
+  }
+}
+
+const [rootEnv, serverEnv] = await Promise.all([readEnv(".env"), readEnv("tts-server/.env")]);
+const env = { ...rootEnv, ...serverEnv, ...process.env };
+let url = env.TTS_URL;
+if (url === undefined) {
+  const { unstable_readConfig } = await import("wrangler");
+  const { vars } = unstable_readConfig({ config: path.join(root, "wrangler.jsonc") });
+  if (typeof vars?.TTS_URL === "string") url = vars.TTS_URL;
+}
+const base = (url ?? "").replace(/\/$/, "");
+const token = env.TTS_SERVER_TOKEN ?? "";
 if (!base || !token) {
-  console.error("Set TTS_URL and TTS_SERVER_TOKEN (the same token as on the server). See README-voice.md.");
+  if (!base) console.error("Set vars.TTS_URL in wrangler.jsonc or override TTS_URL in tts-server/.env or your shell.");
+  if (!token) console.error("Set TTS_SERVER_TOKEN in tts-server/.env or your shell environment.");
+  console.error("See README-voice.md.");
   process.exit(1);
 }
 const access =
-  process.env.CF_ACCESS_CLIENT_ID && process.env.CF_ACCESS_CLIENT_SECRET
-    ? { "CF-Access-Client-Id": process.env.CF_ACCESS_CLIENT_ID, "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET }
+  env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET
+    ? { "CF-Access-Client-Id": env.CF_ACCESS_CLIENT_ID, "CF-Access-Client-Secret": env.CF_ACCESS_CLIENT_SECRET }
     : {};
 if (!Object.keys(access).length && !/^http:\/\/(localhost|127\.0\.0\.1)/.test(base)) {
   console.warn("! No CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET: Cloudflare Access will refuse the requests if it guards TTS_URL.");
@@ -222,7 +301,7 @@ for (const lang of LANGS) {
       const [key, unit] = job;
       // Each clip is written as soon as it's recorded, so a run that stops can simply be run again:
       // clips already on disk are skipped, and the manifest is only rewritten at the end.
-      await fs.writeFile(path.join(dir, `${key}.mp3`), await speak(lang, fp, unit));
+      await saveTrimmedClip(path.join(dir, `${key}.mp3`), await speak(lang, fp, unit));
       done++;
       if (done % 10 === 0 || !todo.length) {
         const rate = (Date.now() - started) / 1000 / done;
