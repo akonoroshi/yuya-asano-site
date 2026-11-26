@@ -17,11 +17,11 @@
     "dev:fresh": "npm run clean && astro dev"
   },
   "dependencies": {
-    "@astrojs/sitemap": "^3.7.5",
+    "@astrojs/sitemap": "^3.7.6",
     "@fontsource-variable/hanken-grotesk": "^5.0.0",
-    "astro": "^7.4.12"
+    "astro": "^7.4.13"
   },
   "devDependencies": {
-    "wrangler": "^4.162.0"
+    "wrangler": "^4.166.0"
   }
 }
